@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey, JSON, DateTime, UniqueConstraint, func
+from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey, JSON, DateTime, UniqueConstraint, func, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from geoalchemy2 import Geometry
 
@@ -77,3 +77,20 @@ class CrimeStat(Base):
     __table_args__ = (
         UniqueConstraint('area_id', 'garda_division', 'year', 'crime_category', name='uq_crime_stats_area_div_year_cat'),
     )
+
+class AreaAgentSummary(Base):
+    __tablename__ = 'area_agent_summaries'
+    id = Column(Integer, primary_key=True, index=True)
+    area_id = Column(Integer, ForeignKey('areas.id'), index=True)
+    run_id = Column(String, nullable=False)
+    summary = Column(String, nullable=False)
+    livability_signal = Column(Float, nullable=False)
+    confidence = Column(Float, nullable=False)
+    flags = Column(JSON)
+    needs_human_review = Column(Boolean, server_default='false')
+    structured_data_snapshot = Column(JSON)
+    source_count = Column(Integer, nullable=False)
+    model_name = Column(String, nullable=False)
+    source_name = Column(String, nullable=False, server_default='agent_pipeline')
+    ingested_at = Column(DateTime(timezone=True), server_default=func.now())
+

@@ -26,3 +26,10 @@ This document outlines the architectural decisions for the data ingestion and st
 - **BaseConnector**: An abstract base class defining the `fetch -> validate -> load` ETL pipeline.
 - Connectors run synchronously, parsing inputs and yielding valid `Pydantic` models that map to SQLAlchemy inserts.
 - **Error Handling**: Connectors log summaries (Fetched, Validated, Upserted, Rejected, Errors) directly to standard output upon completion.
+
+## Agents Layer
+- **Sequential Pipeline**: Processes unstructured text via a 3-step pipeline (Extract -> Score -> Fuse). No multi-agent swarms.
+- **Strict Typed Contracts**: Each LLM step is forced to output JSON matching Pydantic schemas. Invalid outputs are retried once, then dead-lettered.
+- **Deterministic Review Gate**: The final Fuse step uses hardcoded logic to compare the agent's qualitative livability signal against structured metrics. Disagreements automatically flag the summary for human review (
+eeds_human_review = True).
+

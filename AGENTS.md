@@ -1,223 +1,197 @@
-# AGENTS.md — TerraPulse
+# AGENTS.md — Phase 2: Agent Layer
 
-This file is the instruction set for the coding agent (GLM) working on this repository.
-Read this fully before writing any code. Follow the scope boundaries exactly — do not
-build layers that are explicitly marked out of scope for this phase.
+This file extends the original AGENTS.md. Ingestion and Storage are now complete:
+Postgres + PostGIS is running, migrations 001-006 are applied, `areas` is seeded, and
+the PPR, OSM, CSO, and crime connectors run end-to-end with dead-letter handling.
 
----
-
-## 1. Project overview
-
-**TerraPulse** is an agentic AI platform for analysing housing prices and neighbourhood
-conditions, starting with Dublin, Ireland, and designed from day one to extend to all
-of Ireland without rework. It combines housing market data with urban and social-context
-signals (crime, schools, transport, deprivation, amenities) and presents the results as
-interactive overlays on a map. The long-term system has six layers: Ingestion, Storage,
-Model Training, Agents, Backend (FastAPI), and Frontend (React + Maps).
-
-**This phase covers ONLY two layers: Ingestion and Storage.** Do not scaffold or implement
-the Model Training, Agents, Backend, or Frontend layers yet. You may create empty
-placeholder directories for them (already present in the repo structure below) but write
-no logic inside them. Stay inside `ingestion/` and `storage/` plus shared root-level config.
+**This phase builds ONLY the Agent Layer.** Do not touch `ingestion/` or `storage/`
+except to read from them. Do not start on `models_layer/`, `backend/`, or `frontend/`.
 
 ---
 
-## 2. Scope for this task
+## 1. What the agent layer is for
 
-Build:
-1. A working **data ingestion layer** that pulls real data from the sources listed in
-   Section 4, validates it against strict schemas, and writes clean output to disk and
-   to the database.
-2. A working **storage layer**: Postgres + PostGIS schema, migrations, and a thin data
-   access layer (no ORM business logic beyond CRUD — keep it simple).
+Some signals about an area cannot be captured by structured data alone — local context,
+recent news, planning/development chatter, qualitative "what is this area like" framing.
+The agent layer's job is to turn unstructured text (scraped articles, council notices,
+planning applications) into a small set of structured, validated outputs that get stored
+alongside the structured metrics from Phase 1, and eventually surface in the API and
+frontend as a "neighbourhood summary."
 
-Do NOT build:
-- ML models or training scripts
-- Agent/LLM logic
-- FastAPI endpoints
-- Frontend code
-
-The deliverable is: I can run one command, it pulls real Dublin data from at least 3 of
-the sources below, validates it, and I can query it back out of Postgres with correct
-area-level joins.
+**Important constraint, decided deliberately:** this is a sequential pipeline of agents
+with strict typed contracts between steps — not a multi-agent swarm with autonomous
+delegation. Benchmarking from Princeton NLP found a single well-scoped agent matches or
+beats multi-agent setups on most tasks when given equivalent tools and context, and each
+extra agent hop adds real latency and token cost for no accuracy gain. Do not build a
+planner/supervisor agent that dynamically spawns sub-agents. Build exactly the three
+steps below, in order, every time.
 
 ---
 
-## 3. Design principles (non-negotiable)
-
-- **Schema-first.** Every connector's output must be validated against a Pydantic model
-  before it is allowed to reach storage. If validation fails, the record goes to a
-  dead-letter log (a JSON file under `data/dead_letter/`), not into the database, and the
-  pipeline does not crash.
-- **Idempotent.** Re-running a connector on the same source data must not create
-  duplicate rows. Use upserts keyed on a natural key (e.g. PPR: date + address + price;
-  OSM: OSM element ID).
-- **Source-traceable.** Every row in storage carries `source_name`, `source_url_or_id`,
-  and `ingested_at`. We must always be able to say where a number came from.
-- **Config over hardcoding.** Area boundaries, source URLs, and API keys live in config
-  files / `.env`, never inline in code.
-- **Built for scale beyond Dublin.** Tables and connectors must be designed so that adding
-  Cork, Galway, Limerick etc. later is a config change (new area boundary + new source
-  rows), not a schema change. Do not hardcode "Dublin" into table or column names.
-- **No silent failures.** Every connector run produces a summary log: records fetched,
-  records validated, records rejected, records upserted.
-
----
-
-## 4. Data sources for this phase
-
-Implement connectors for these sources. Build in this priority order — stop and confirm
-with me before moving past source 4 if time is short.
-
-1. **Residential Property Price Register (PSRA)** — official source of all residential
-   property sales in Ireland since 2010 (date, price, address).
-   - Primary: https://www.propertypriceregister.ie/ (CSV download)
-   - Note: raw PSRA CSVs are CP1252-encoded and the site's SSL config is known to be
-     finicky — handle encoding explicitly, do not assume UTF-8.
-   - Easier alternative for clean JSON: the community-run unofficial API wrapper at
-     https://github.com/civictech-ie/price-register (hosted instance at
-     priceregister.civictech.ie) — evaluate this first since it removes the encoding
-     pain; fall back to raw CSV parsing if it doesn't cover what we need.
-   - Dublin-specific subset is also listed on data.gov.ie:
-     https://data.gov.ie/dataset/dublin-residential-property-price-register
-
-2. **OpenStreetMap (Overpass API)** — schools, hospitals, GP surgeries, supermarkets,
-   parks, police stations, public transport stops, by bounding box per area.
-   - Overpass API endpoint: https://overpass-api.de/api/interpreter
-   - Use `overpy` or raw Overpass QL queries. Tag reference: amenity=school,
-     amenity=hospital, amenity=doctors, amenity=supermarket, leisure=park,
-     amenity=police, highway=bus_stop, railway=stop (for Luas/DART).
-
-3. **CSO (Central Statistics Office Ireland)** — population density, age profile,
-   Pobal HP deprivation index (standard Irish deprivation measure), by Small Area.
-   - Data portal: https://data.cso.ie/
-   - Open data: https://www.cso.ie/en/statistics/
-
-4. **Crime statistics** — recorded crime by Garda Division (not finer-grained than
-   division — note this limitation in the connector's docstring and in storage, since
-   it means crime data joins at a coarser area level than other metrics).
-   - CSO Garda recorded crime statistics: https://data.cso.ie/ (search "recorded crime")
-
-5. **Transport / commute data** (lower priority — implement only if time remains)
-   - Dublin Bus / Luas / TFI open data portal: https://www.transportforireland.ie/
-   - National Transport Authority GTFS feed: https://www.transportforireland.ie/transitData/PT_Data.html
-
-For each connector, write the source URL, last-checked date, and any access
-restrictions (rate limits, auth required) into a `SOURCES.md` file at the repo root,
-since these links and terms can change.
-
----
-
-## 5. Codebase structure (full project — build only the bolded parts now)
+## 2. The three-step pipeline
 
 ```
-terrapulse/
-├── AGENTS.md                  ← this file
-├── SOURCES.md                 ← (create) data source registry with URLs + access notes
-├── README.md                  ← (create) project overview + setup instructions
-├── .env.example                ← (create) all required env vars, no real secrets
-├── docker-compose.yml          ← (create) Postgres + PostGIS + Redis for local dev
-├── pyproject.toml / requirements.txt
-│
-├── **ingestion/**              ← BUILD THIS
-│   ├── connectors/
-│   │   ├── base.py             # abstract base connector: fetch() -> validate() -> load()
-│   │   ├── ppr_connector.py    # Property Price Register
-│   │   ├── osm_connector.py    # OpenStreetMap / Overpass amenities
-│   │   ├── cso_connector.py    # CSO demographics + deprivation index
-│   │   └── crime_connector.py  # Garda crime stats
-│   ├── schemas/
-│   │   ├── property_sale.py    # Pydantic model for a validated property sale record
-│   │   ├── amenity.py           # Pydantic model for an OSM amenity record
-│   │   ├── area_demographics.py
-│   │   └── crime_stat.py
-│   ├── jobs/
-│   │   └── run_ingestion.py     # CLI entrypoint: run one or all connectors
-│   ├── utils/
-│   │   ├── geocoding.py         # address/lat-lon -> area_id resolution
-│   │   └── logging_config.py
-│   └── tests/
-│       └── test_<connector>.py  # at least one test per connector using sample fixtures
-│
-├── **storage/**                ← BUILD THIS
-│   ├── migrations/              # SQL migration files, numbered sequentially
-│   │   ├── 001_init_postgis.sql
-│   │   ├── 002_areas.sql
-│   │   ├── 003_property_sales.sql
-│   │   ├── 004_amenities.sql
-│   │   ├── 005_demographics.sql
-│   │   └── 006_crime_stats.sql
-│   ├── models/
-│   │   └── db_models.py         # SQLAlchemy models matching the migrations
-│   ├── seeds/
-│   │   └── seed_areas.py        # seeds the `areas` table with Dublin postal
-│   │                             #   districts / Garda divisions as initial boundaries
-│   └── scripts/
-│       └── db_connect.py        # connection pool + session helper, read from .env
-│
-├── models_layer/                ← DO NOT BUILD YET (placeholder only)
-├── agents_layer/                ← DO NOT BUILD YET (placeholder only)
-├── backend/                      ← DO NOT BUILD YET (placeholder only)
-├── frontend/                     ← DO NOT BUILD YET (placeholder only)
-├── infra/                        ← DO NOT BUILD YET (placeholder only)
-│
-├── data/
-│   ├── raw/                     # untouched source pulls, partitioned by source + date
-│   ├── processed/                # validated, cleaned output
-│   └── dead_letter/               # records that failed schema validation
-└── docs/
-    └── architecture.md            # (create) short doc restating this layer's design
+raw text (per area)  →  [1] EXTRACT  →  [2] SCORE/SUMMARISE  →  [3] FUSE + REVIEW GATE  →  storage
+```
+
+### Step 1 — Extract
+- Input: raw scraped text for one area (news article, council notice, etc.) plus the
+  area_id it belongs to.
+- Output: a structured Pydantic object — NOT free text. Fields: `topics` (list of enum
+  values: e.g. `development`, `crime_incident`, `amenity_change`, `transport_change`,
+  `general`), `key_facts` (list of short strings, max ~15 words each, no verbatim long
+  quotes from the source), `sentiment` (enum: positive/neutral/negative/mixed),
+  `mentioned_entities` (list of strings — place names, project names).
+- The LLM call must be instructed to return ONLY JSON matching this schema. Validate the
+  response against the Pydantic model immediately. If it fails validation, retry once
+  with an error message appended to the prompt telling the model what was wrong. If it
+  fails twice, log to `data/dead_letter/agent_extract/` and skip this record — do not
+  crash the pipeline and do not pass invalid data downstream.
+
+### Step 2 — Score / Summarise
+- Input: the validated output of Step 1, for one area, potentially aggregated across
+  multiple source texts collected for that area in this run.
+- Output: a structured Pydantic object with: `area_id`, `summary` (2-3 sentences, plain
+  English, written fresh — not copied from source text), `livability_signal`
+  (float -1.0 to 1.0, where the agent's qualitative read of the area's trajectory is
+  encoded numerically), `confidence` (float 0-1, how much source material backed this),
+  `flags` (list of enum: e.g. `low_source_count`, `conflicting_signals`,
+  `recent_negative_news`).
+- Same validation/retry/dead-letter rule as Step 1.
+- If `confidence` is below a configurable threshold (default 0.3), set `flags` to
+  include `low_source_count` and still return a result — do not fabricate confidence.
+
+### Step 3 — Fuse + Review Gate
+- Input: Step 2's output for an area, PLUS the structured metrics already in Postgres
+  for that same area (price trend, crime_stats counts, demographics).
+- Logic here is NOT an LLM call — this step is deterministic code, not another agent.
+  Compare the agent's `livability_signal` direction against what the structured data
+  would suggest (e.g. if crime_stats counts have risen sharply but the agent's signal is
+  strongly positive, or vice versa). This is a simple rule-based check, not another
+  model call.
+- Output: the final `area_agent_summary` record (see schema in Section 3), with an added
+  `needs_human_review` boolean. Set it `true` when the agent's qualitative signal and
+  the structured data disagree beyond a configurable threshold, or when `confidence` was
+  low. This flag is the actual production-grade behaviour we want here: the system
+  should know when to distrust itself, not silently average away a contradiction.
+- Do NOT auto-resolve disagreements by picking one side. Store both signals plus the
+  flag, so a human (or, later, a more careful process) can inspect it.
+
+---
+
+## 3. Storage additions (new migration, do not modify existing tables)
+
+Add ONE new migration file: `storage/migrations/007_agent_summaries.sql`
+
+```sql
+CREATE TABLE area_agent_summaries (
+    id SERIAL PRIMARY KEY,
+    area_id INTEGER REFERENCES areas(id),
+    run_id UUID NOT NULL,                  -- groups all summaries from one pipeline run
+    summary TEXT NOT NULL,
+    livability_signal FLOAT NOT NULL,       -- -1.0 to 1.0
+    confidence FLOAT NOT NULL,              -- 0 to 1
+    flags JSONB,                             -- list of flag strings
+    needs_human_review BOOLEAN NOT NULL DEFAULT FALSE,
+    structured_data_snapshot JSONB,          -- the metrics compared against, for audit
+    source_count INTEGER NOT NULL,
+    model_name TEXT NOT NULL,                -- e.g. "claude-sonnet-4-6" — always log which model produced this
+    source_name TEXT NOT NULL DEFAULT 'agent_pipeline',
+    ingested_at TIMESTAMP NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_agent_summaries_area ON area_agent_summaries(area_id);
+CREATE INDEX idx_agent_summaries_review ON area_agent_summaries(needs_human_review);
+```
+
+Adjust column types if they conflict with existing conventions in migrations 001-006 —
+match whatever pattern those files already use for FKs, timestamps, and JSON columns.
+
+---
+
+## 4. Codebase structure for this phase
+
+```
+agents_layer/
+├── schemas/
+│   ├── extraction_result.py     # Pydantic model for Step 1 output
+│   ├── score_result.py          # Pydantic model for Step 2 output
+│   └── fused_summary.py         # Pydantic model for Step 3 output (matches migration 007)
+├── steps/
+│   ├── extract.py               # Step 1: LLM call + validation + retry + dead-letter
+│   ├── score.py                 # Step 2: LLM call + validation + retry + dead-letter
+│   └── fuse.py                  # Step 3: deterministic comparison logic, NO LLM call
+├── llm_client.py                  # thin wrapper around the Anthropic API client —
+│                                   #   one place that handles the API call, retries on
+│                                   #   transient errors, and enforces JSON-only output
+├── pipeline.py                    # orchestrates extract -> score -> fuse for one area
+├── jobs/
+│   └── run_agent_pipeline.py      # CLI entrypoint: run pipeline for one area, all
+│                                   #   areas, or areas with text collected since a date
+├── text_sources/
+│   └── council_news_connector.py  # pulls raw text per area for the agents to process —
+│                                   #   this is the ONE new ingestion-adjacent piece this
+│                                   #   phase needs; reuses the base connector pattern
+│                                   #   from ingestion/connectors/base.py, do not duplicate it
+└── tests/
+    ├── fixtures/                   # sample raw text + expected structured outputs
+    ├── test_extract.py
+    ├── test_score.py
+    └── test_fuse.py               # test the deterministic logic with constructed
+                                     #   disagreement cases — this is the part most worth
+                                     #   testing since it has no LLM randomness
 ```
 
 ---
 
-## 6. Storage layer requirements
+## 5. Design rules specific to this layer
 
-- **Database**: Postgres with the PostGIS extension enabled (for area boundary geometry
-  and lat/lon point storage). Run via Docker Compose for local dev.
-- **Core tables** (design these to be area-agnostic, not Dublin-specific):
-  - `areas` — id, name, area_type (e.g. "postal_district", "garda_division",
-    "small_area"), county, geometry (PostGIS polygon), created_at
-  - `property_sales` — id, area_id (FK), sale_date, price_eur, address_raw,
-    address_normalized, lat, lon, source_name, source_record_id, ingested_at
-  - `amenities` — id, area_id (FK), amenity_type, name, lat, lon, osm_id, ingested_at
-  - `area_demographics` — id, area_id (FK), year, population, population_density,
-    deprivation_index, age_profile_json, source_name, ingested_at
-  - `crime_stats` — id, area_id (FK), garda_division, year, crime_category, count,
-    source_name, ingested_at
-- All tables get a `source_name`, and a timestamp column for traceability, per the
-  design principles above.
-- Write migrations as plain numbered `.sql` files (not framework-specific migration
-  tooling) so they're transparent and reviewable — keep it simple for this phase.
-- Provide one helper script that connects to the DB and runs a sanity query (e.g. row
-  counts per table) so I can verify ingestion worked end-to-end.
-
----
-
-## 7. What "done" looks like for this phase
-
-- [ ] `docker-compose up` brings up Postgres+PostGIS cleanly
-- [ ] Migrations run cleanly against a fresh database
-- [ ] `areas` table is seeded with real Dublin postal districts (at minimum: Dublin 1
-      through Dublin 24, plus a few named suburbs like Blackrock, Dún Laoghaire)
-- [ ] At least the PPR connector and the OSM connector run end-to-end: fetch real data
-      → validate → upsert into Postgres, with a console summary of records processed
-- [ ] Re-running a connector does not duplicate rows
-- [ ] Invalid records are visibly logged to `data/dead_letter/`, not silently dropped
-- [ ] `SOURCES.md` and `docs/architecture.md` exist and are accurate
-- [ ] A short `README.md` lets a stranger run the whole ingestion pipeline from a clean
-      clone in under 10 minutes
+- **JSON-only LLM calls.** Every prompt to the model must explicitly state "respond with
+  ONLY valid JSON matching this schema, no preamble, no markdown fences." Strip any
+  accidental ```` ```json ```` fences defensively before parsing anyway.
+- **One model call per step, no internal chaining inside a step.** Step 1 makes exactly
+  one LLM call per input text (plus up to 1 retry). Step 2 makes exactly one LLM call per
+  area per run (plus up to 1 retry). Do not let an agent decide to call itself again or
+  call other tools — these are plain prompt-in, JSON-out calls.
+- **Always log `model_name` and a `run_id`** with every output, so any summary in the
+  database can be traced back to exactly what model and run produced it. This matters
+  if the model is swapped or upgraded later.
+- **Cost awareness.** Batch text per area before calling Step 1 where possible rather
+  than one call per sentence/paragraph. Log token usage per run to the console summary.
+- **No tool use inside the LLM calls in this phase.** Do not give the model web search,
+  code execution, or other tools yet — these are closed-form text-in, JSON-out
+  transformations. Keep this phase simple and deterministic to test; tool-using agents
+  are a later iteration once this baseline is proven reliable.
+- **Reuse, don't duplicate.** The Step 1-3 validation/retry/dead-letter pattern should
+  closely mirror the connector pattern already built in `ingestion/connectors/base.py`.
+  If that base class is generic enough, consider extending it rather than writing
+  parallel logic — ask me first if you think this requires changing the base class,
+  since that touches Phase 1 code.
 
 ---
 
-## 8. Working agreement
+## 6. What "done" looks like for this phase
 
-- Ask me before making any architectural decision not already specified above (e.g.
-  choice of HTTP client library, exact Overpass query structure).
-- If a data source above is dead, paywalled, or rate-limited beyond practical use,
-  stop and tell me — do not silently substitute a different source without confirming.
-- Prefer boring, explicit code over clever abstractions. This is a 1-2 day build, not
-  a long-term maintained open-source library — but it still has to be correct and
-  schema-validated per Section 3.
-- Commit in small, logical chunks (one connector per commit, schema + migration
-  together, etc.) so progress is reviewable.
+- [ ] Migration `007_agent_summaries.sql` applies cleanly on top of the existing schema
+- [ ] `council_news_connector.py` pulls real raw text for at least 3 seeded areas (websites for council/news scraping should reuse the same source-vetting approach in SOURCES.md before this is "real" — confirm sources with me before scraping)
+- [ ] Running `run_agent_pipeline.py --area-id <id>` produces one row in
+      `area_agent_summaries` for that area, with a sensible summary, a `confidence`
+      score, and `needs_human_review` set correctly when I manually construct a
+      contradictory test case
+- [ ] Invalid/unparseable LLM responses are retried once, then dead-lettered, and do not
+      crash the run
+- [ ] Console output after a run shows: areas processed, summaries created, summaries
+      flagged for review, approximate token usage
+- [ ] `docs/architecture.md` is updated with a short section describing this pipeline
+- [ ] At least one test in `test_fuse.py` proves the review-gate logic actually catches
+      a constructed disagreement between agent signal and structured data
+
+---
+
+## 7. Working agreement (same as Phase 1, repeated for emphasis)
+
+- Confirm with me before choosing which real text sources to scrape for
+  `council_news_connector.py` — do not silently pick sources.
+- Ask before changing anything in `ingestion/` or `storage/migrations/001-006`.
+- If the existing `areas`/`property_sales`/etc. schema from Phase 1 differs from what's
+  assumed here, stop and tell me the actual column names so this phase's foreign keys
+  and JOINs are correct — do not guess and proceed.

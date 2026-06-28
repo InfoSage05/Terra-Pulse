@@ -6,3 +6,4 @@ geoalchemy2
 python-dotenv
 overpy
 pytest
+anthropic>=0.18.0
