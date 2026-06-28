@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS areas (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    area_type VARCHAR(100) NOT NULL,
+    county VARCHAR(100) NOT NULL,
+    geometry GEOMETRY(Polygon, 4326),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_areas_geometry ON areas USING GIST (geometry);
