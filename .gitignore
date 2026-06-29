@@ -1,0 +1,24 @@
+# Environments
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+
+# Node
+node_modules/
+dist/
+
+# IDEs
+.idea/
+.vscode/
+
+# Project Specific
+data/dead_letter/
+data/models/

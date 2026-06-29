@@ -1,197 +1,161 @@
-# AGENTS.md — Phase 4: Frontend Layer (React + Google Maps)
+# AGENTS.md — Phase 5: Infra, Integration Hardening & Documentation
 
-This extends Phases 1-3. By now: Postgres is fully populated, the agent pipeline flags
-contradictions, a LightGBM model serves real-time price predictions, and FastAPI serves
-`/v1/areas`, `/v1/areas/{id}`, `/v1/areas/{id}/score`, and `/v1/predict/price` — all
-versioned, all carrying model version info, and `needs_human_review` always passes
-through unmodified from Phase 2.
+This extends Phases 1-4. By now: ingestion + storage, the agent pipeline, the
+LightGBM/rule-based model layer, the FastAPI backend, and the React+Maps frontend all
+work — built phase by phase, each largely in isolation. This phase does NOT add a new
+layer. It integrates, hardens, and documents the existing five layers so the whole thing
+runs as one system, from a clean clone, in front of someone evaluating it.
 
-**This phase builds ONLY the Frontend layer.** Do not modify `backend/`, `models_layer/`,
-`agents_layer/`, `ingestion/`, or `storage/`. If an endpoint doesn't return what this
-phase needs, stop and tell me — do not add backend code from this phase's prompt.
-
----
-
-## 1. What "done" looks like, stated up front
-
-A user opens the app, sees a map of Dublin areas colour-coded by a score they can switch
-between (price / affordability / safety / livability), clicks an area, sees its detail
-panel with real numbers and the agent-generated summary, and — critically — if that
-area's `needs_human_review` is `true`, sees a visible, unmissable indicator that the
-livability read is uncertain or contradicts the data. That last part is not optional
-polish; it is the single most important thing this layer has to get right, because it is
-the entire payoff of Phases 2 and 3's review-gate work. A frontend that hides this flag
-defeats the purpose of building it.
+**This is the phase that turns five working pieces into one working product.** Do not
+add new features to any layer. If you find a real bug while integrating, fix it
+minimally and tell me what broke and why — do not refactor beyond the fix.
 
 ---
 
-## 2. Tech choices (decided, do not relitigate)
+## 1. Why this phase exists
 
-- React (Vite), TypeScript — not JavaScript, since the API contract from
-  `shared/model_contract.py` should be mirrored as TypeScript types, and that mirroring
-  only pays off with type checking.
-- Google Maps JavaScript API for the map itself (matches the original project brief).
-- No heavy state management library (Redux etc.) — React Query (TanStack Query) for
-  server state + plain React state for UI state is enough at this scale.
-- Tailwind for styling.
-- Do not add authentication/login UI in this phase — out of scope until requested.
-
----
-
-## 3. Codebase structure
-
-```
-frontend/
-├── src/
-│   ├── types/
-│   │   └── api.ts                  # TypeScript interfaces mirroring
-│   │                                 #   shared/model_contract.py EXACTLY — field names,
-│   │                                 #   optionality (Python `| None` -> TS `| null`),
-│   │                                 #   and enums must match. This is the frontend half
-│   │                                 #   of the contract discipline from Phase 3 — do not
-│   │                                 #   let these drift from the backend's real schema.
-│   ├── api/
-│   │   ├── client.ts                # fetch wrapper: base URL from env, attaches API
-│   │   │                              #   key header, central error handling
-│   │   ├── areas.ts                  # getAreas(), getAreaDetail(id), getAreaScore(id)
-│   │   └── predict.ts                # predictPrice(input)
-│   ├── hooks/
-│   │   ├── useAreas.ts                # React Query hook wrapping areas.ts
-│   │   ├── useAreaScore.ts            # React Query hook, includes the
-│   │   │                                #   needs_human_review field typed as required,
-│   │   │                                #   never optional/ignorable in the type
-│   │   └── usePricePrediction.ts
-│   ├── components/
-│   │   ├── map/
-│   │   │   ├── MapContainer.tsx        # mounts the Google Map, holds map instance
-│   │   │   ├── ScoreLayer.tsx           # renders ONE score type as a choropleth overlay
-│   │   │   │                             #   — price / affordability / safety / livability
-│   │   │   │                             #   are each an instance of this, swapped via a
-│   │   │   │                             #   layer toggle, not four separate components
-│   │   │   ├── LayerToggle.tsx          # UI control to switch which ScoreLayer is active
-│   │   │   └── AreaMarker.tsx            # click target per area, opens detail panel
-│   │   ├── area-detail/
-│   │   │   ├── AreaDetailPanel.tsx       # slide-in/side panel shown on area click
-│   │   │   ├── ScoreSummaryCard.tsx       # shows the 4 scores + their model versions
-│   │   │   ├── ReviewFlagBanner.tsx       # **the most important component in this
-│   │   │   │                               #   phase** — renders prominently, unmissable
-│   │   │   │                               #   styling (not a small grey badge), when
-│   │   │   │                               #   needs_human_review is true. Must explain
-│   │   │   │                               #   in plain language that the area's
-│   │   │   │                               #   qualitative read and its hard data disagree
-│   │   │   │                               #   or that confidence is low — do not just say
-│   │   │   │                               #   "flagged," say why, using the `flags` field.
-│   │   │   ├── AgentSummaryBlock.tsx       # shows the Phase 2 agent's summary text,
-│   │   │   │                               #   confidence, and last-updated date
-│   │   │   └── PriceTrendChart.tsx          # simple chart of historical price_sales,
-│   │   │                                     #   from area detail endpoint, not from
-│   │   │                                     #   the prediction endpoint
-│   │   ├── prediction/
-│   │   │   └── PricePredictorWidget.tsx     # small form: pick an area, optionally
-│   │   │                                     #   property features if the contract
-│   │   │                                     #   supports them, calls predictPrice(),
-│   │   │                                     #   shows result WITH its confidence
-│   │   │                                     #   interval, never just a single number
-│   │   ├── filters/
-│   │   │   └── AreaFilters.tsx               # basic filter bar (e.g. by area name/type)
-│   │   └── shared/
-│   │       ├── LoadingState.tsx               # one shared loading component, used
-│   │       │                                   #   everywhere data is in flight — no
-│   │       │                                   #   silent blank screens
-│   │       ├── ErrorState.tsx                  # one shared error component, distinguishes
-│   │       │                                   #   "no data yet" (valid, calm message)
-│   │       │                                   #   from "request failed" (retry option)
-│   │       └── EmptyScoreState.tsx              # specific case: a score field is `null`
-│   │                                             #   because no model has scored it yet —
-│   │                                             #   per Phase 3, this is valid data, not
-│   │                                             #   an error, and must be displayed as
-│   │                                             #   "not yet available," not hidden or
-│   │                                             #   shown as zero
-│   ├── pages/
-│   │   └── MapPage.tsx                          # composes MapContainer + AreaDetailPanel
-│   │                                              #   + filters into the single main view
-│   ├── App.tsx
-│   └── main.tsx
-├── .env.example                                  # VITE_API_BASE_URL, VITE_GOOGLE_MAPS_KEY
-└── tests/
-    ├── ReviewFlagBanner.test.tsx                  # explicitly tests that a mocked
-    │                                                #   needs_human_review=true API
-    │                                                #   response renders the banner —
-    │                                                #   mirrors the backend's own
-    │                                                #   passthrough test from Phase 3
-    ├── EmptyScoreState.test.tsx                     # tests that null score fields render
-    │                                                #   as "not available," not as 0 or NaN
-    └── PricePredictorWidget.test.tsx
-```
+Each layer was built and tested somewhat independently. The most common failure mode at
+this point in a multi-phase build is: each layer works on its own, but the seams between
+them are untested — e.g. the frontend's TypeScript types silently drifted from the real
+backend response, or the agent pipeline's `area_id` type doesn't quite match what the
+model layer's feature store expects, or one service assumes the others are already
+running and there's no clear startup order. This phase finds and fixes those seams, then
+makes the whole thing runnable with one command and documents it so someone unfamiliar
+with the build history can run and understand it.
 
 ---
 
-## 4. Map layer behaviour, specifically
+## 2. Docker Compose — the full stack, one command
 
-- `ScoreLayer.tsx` takes a `scoreType` prop (`price` | `affordability` | `safety` |
-  `livability`) and a colour scale appropriate to that score. Do not hardcode four
-  separate colour scales inline in four separate files — define scales once in a
-  `lib/colourScales.ts` and reference them.
-- Choropleth fill uses the area polygon geometry — if PostGIS geometry isn't yet exposed
-  via the API in a frontend-friendly format (e.g. GeoJSON), stop and tell me; do not
-  approximate area shapes as circles around a centroid as a silent fallback without
-  flagging it to me first, since that's a visible quality regression from "proper
-  choropleth."
-- Areas with `null` for the currently selected score type render in a distinct neutral
-  "no data" colour, never blank/invisible and never falsely colored as if scored zero.
-- Areas with `needs_human_review = true` get a visible marker overlay (e.g. a small
-  warning icon at the area's center) regardless of which score layer is currently
-  selected — this should be visible on the map itself, not only inside the detail panel,
-  since a user browsing the map should be able to spot flagged areas before clicking in.
+Build `docker-compose.yml` at the repo root (extending whatever Phase 1's Postgres+
+PostGIS compose file already had — do not create a second one) with services for:
+
+- `postgres` (PostGIS-enabled, as built in Phase 1)
+- `redis` (for score caching, as specified in Phase 3)
+- `backend` (FastAPI, built from `backend/Dockerfile` — write this Dockerfile now if it
+  doesn't exist yet)
+- `frontend` (built from `frontend/Dockerfile` — write this now if it doesn't exist;
+  for local dev this can run Vite's dev server, document separately if a production
+  static build differs)
+- Healthchecks on `postgres` and `redis`, with `backend` waiting on those healthchecks
+  before starting (use `depends_on: condition: service_healthy`, not a blind sleep)
+
+Add a `.env.example` at the repo root that is the single source of truth for every env
+var across every layer (DB credentials, Google Maps API key, Anthropic API key, model
+registry path, etc.) — consolidate any per-layer `.env.example` files that currently
+exist into this one, with comments grouping them by layer.
+
+**Explicitly out of scope for this phase:** Kubernetes, cloud deployment configs,
+multi-region setup. Docker Compose for local/single-machine running is the target. Note
+in `docs/architecture.md` that cloud deployment is a deliberate future step, not done
+here.
 
 ---
 
-## 5. Error and loading state rules
+## 3. Integration checks — verify the seams, not the layers
 
-- Every data-fetching hook (`useAreas`, `useAreaScore`, `usePricePrediction`) must
-  surface three states to its component: loading, error, success — never assume success.
-- A 404 from `/v1/areas/{id}` (area doesn't exist) is a different UI state from a 200
-  with `null` score fields (area exists, not yet scored). Do not conflate these.
-- Network/server errors show `ErrorState` with a retry action (React Query's `refetch`),
-  not a dead end.
-- The `PricePredictorWidget` must show the model version that produced a prediction
-  (carried in `PricePredictionOutput.model_version`) somewhere in the result, even if
-  small — this keeps the "always traceable to a model version" rule from Phase 3 visible
-  all the way through to the end user, which is a detail worth having in a viva.
+Go through each of the following and report back to me what you find, fixing only clear
+bugs (not redesigning):
+
+1. **Contract drift check**: diff `frontend/src/types/api.ts` against
+   `shared/model_contract.py` field by field. Report any mismatch before fixing it.
+2. **`area_id` type consistency**: confirm the type of `area_id` is consistent across
+   `storage/models/db_models.py`, `agents_layer/schemas/fused_summary.py`,
+   `shared/model_contract.py`, and `frontend/src/types/api.ts`. This is the single most
+   likely place for a silent integer-vs-string or nullable mismatch across five phases.
+3. **End-to-end data flow test**: pick ONE real area. Manually trace it through every
+   layer — does it have rows in `property_sales`, `amenities`, `crime_stats`? Does it
+   have an `area_agent_summaries` row? Does `/v1/areas/{id}/score` return non-null
+   values for it? Does it render correctly on the map with real data, not placeholder
+   data? Write this trace down in `docs/integration_trace.md` as evidence the pipeline
+   genuinely works end-to-end for at least one real case, not just unit-tested in
+   isolation.
+4. **Cold-start order check**: from a totally fresh `docker-compose up`, with an empty
+   database, what is the correct order of operations to get to a working frontend?
+   (Migrations → seed areas → run ingestion connectors → run agent pipeline → train
+   models → start backend → start frontend, presumably — confirm the real order and
+   write it down.) This becomes Section 5 of the README.
+5. **Review-gate end-to-end check**: confirm there is at least one real or deliberately
+   seeded area where `needs_human_review = true` makes it all the way from the Phase 2
+   fuse step, through the Phase 3 API response, to a visibly rendered banner in the
+   Phase 4 frontend, right now, in the running system — not just covered by isolated
+   unit tests in each phase. This is the project's core differentiator; verify it
+   actually works as one continuous path before calling the project done.
+
+---
+
+## 4. CI (lightweight, not a full pipeline)
+
+Add `.github/workflows/ci.yml` that, on every push:
+- Spins up Postgres+PostGIS as a service container
+- Runs migrations
+- Runs the test suites from Phases 1-4 (`ingestion/tests`, `agents_layer/tests`,
+  `backend/tests`, `frontend/tests` — whichever exist; don't write new tests in this
+  phase, just wire up running the existing ones)
+- Lints (whatever linter convention each layer already uses — don't introduce a new one)
+- Fails the build on any test failure
+
+Do not add deployment steps to CI in this phase — test-and-lint only.
+
+---
+
+## 5. Documentation pass
+
+### `README.md` (repo root) — rewrite to be complete and standalone
+Must include, in order:
+1. One-paragraph project description (what TerraPulse is, the Dublin-now/Ireland-later
+   scope)
+2. Architecture diagram or description (reference `docs/architecture.md`, don't
+   duplicate it)
+3. Prerequisites (Docker, API keys needed — Google Maps, Anthropic)
+4. Exact step-by-step from clean clone to working app — the real order from Section 3.4
+5. How to run tests
+6. Known limitations (be honest: Dublin-only area coverage so far, crime data at Garda
+   division granularity not finer, agent text sources limited to whatever was actually
+   scraped, etc. — list what's actually true, not a generic disclaimer)
+
+### `docs/architecture.md` — consolidate, don't fragment
+By now this file has likely accumulated notes from each phase. Reorganise it into one
+coherent document: one section per layer, in pipeline order, each describing what it
+does and how it hands off to the next layer. Include the affordability/safety scoring
+formulas (carried over from Phase 3) and the review-gate passthrough rule (carried over
+from Phases 2-4) prominently, since these are the project's most distinctive design
+decisions.
+
+### `docs/integration_trace.md` (new, from Section 3.3)
+The single real area traced end-to-end, with actual values at each layer. This is useful
+both as proof-of-correctness and as the easiest thing to walk through in a demo or viva.
 
 ---
 
 ## 6. What "done" looks like for this phase
 
-- [ ] `npm run dev` serves the app locally and connects to the real backend from Phase 3
-- [ ] Map renders all seeded areas with a working choropleth for at least price and one
-      other score type
-- [ ] Layer toggle correctly swaps the active score type and its colour scale
-- [ ] Clicking an area opens the detail panel with real data from `/v1/areas/{id}` and
-      `/v1/areas/{id}/score`
-- [ ] `ReviewFlagBanner` renders correctly and visibly for a test area with
-      `needs_human_review: true` — verified by `ReviewFlagBanner.test.tsx`, mirroring the
-      backend's own passthrough test
-- [ ] Null/not-yet-available scores render distinctly from zero and from missing areas
-- [ ] `PricePredictorWidget` returns a prediction with a confidence interval and a
-      visible model version
-- [ ] Loading and error states are visible and distinct in every data-fetching component
-      — no blank screens, no infinite spinners with no fallback
-- [ ] `frontend/src/types/api.ts` matches `shared/model_contract.py` field-for-field —
-      spot check this yourself before marking done
-- [ ] `docs/architecture.md` updated with a short section on the frontend's layer
-      structure and the review-flag display rule
+- [ ] `docker-compose up` from a clean clone brings up every service in the correct
+      order, healthchecked, no manual intervention
+- [ ] The cold-start sequence in Section 3.4 is documented and verified to actually work
+      from empty
+- [ ] Contract drift check (Section 3.1) reported, with any real mismatches fixed
+- [ ] `area_id` type consistency (Section 3.2) confirmed across all layers
+- [ ] At least one area is traced end-to-end in `docs/integration_trace.md` with real
+      values, not placeholders
+- [ ] The review-gate end-to-end path (Section 3.5) is confirmed working live, not just
+      via isolated unit tests — this is the project's headline feature and must be
+      demonstrably true in the running system
+- [ ] CI runs on push, runs existing tests across all layers, fails on test failure
+- [ ] `README.md` lets a stranger get from clean clone to working app without asking you
+      a single question
+- [ ] `docs/architecture.md` reads as one coherent document, not five stitched-together
+      phase notes
 
 ---
 
-## 7. Working agreement (carried forward)
+## 7. Working agreement
 
-- If any backend endpoint's actual response shape differs from what Phase 3's contract
-  promised, stop and tell me which field is wrong — do not silently adapt the frontend
-  type to match a broken backend without flagging the mismatch.
-- If PostGIS area geometry isn't available via the API yet in GeoJSON form, stop and ask
-  before falling back to centroid circles.
-- Do not add login/auth, multi-user features, or payment flows — out of scope.
-- Keep `ScoreLayer.tsx` generic across all four score types — if you find yourself
-  writing per-score-type conditional branches deep inside it, that's a sign the colour
-  scale/data shape abstraction in Section 4 needs fixing, not papering over.
+- This phase fixes seams, it does not redesign layers. If something needs a real
+  redesign to integrate properly, stop and tell me — don't quietly rebuild a layer
+  while "just fixing the integration."
+- Report the Section 3 findings to me before silently fixing anything non-trivial,
+  especially anything that touches more than one file across layer boundaries.
+- If the review-gate end-to-end check in Section 3.5 fails anywhere in the chain, that
+  is the most important bug in the whole project to report clearly — stop and tell me
+  exactly where it breaks rather than patching around it.

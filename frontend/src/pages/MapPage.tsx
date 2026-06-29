@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { APIProvider, Map } from "@vis.gl/react-google-maps";
-import { useAreas } from "../../hooks/useAreas";
-import { getAreaScore } from "../../api/areas";
-import { AreaScoreOutput } from "../../types/api";
-import { ScoreType } from "../../lib/colourScales";
-import { ScoreLayer } from "../map/ScoreLayer";
-import { LayerToggle } from "../map/LayerToggle";
-import { AreaMarker } from "../map/AreaMarker";
-import { AreaDetailPanel } from "../area-detail/AreaDetailPanel";
-import { LoadingState } from "../shared/LoadingState";
-import { ErrorState } from "../shared/ErrorState";
+import { MapContainer, TileLayer } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import { useAreas } from "../hooks/useAreas";
+import { getAreaScore } from "../api/areas";
+import { AreaScoreOutput } from "../types/api";
+import { ScoreType } from "../lib/colourScales";
+import { ScoreLayer } from "../components/map/ScoreLayer";
+import { LayerToggle } from "../components/map/LayerToggle";
+import { AreaMarker } from "../components/map/AreaMarker";
+import { AreaDetailPanel } from "../components/area-detail/AreaDetailPanel";
+import { LoadingState } from "../components/shared/LoadingState";
+import { ErrorState } from "../components/shared/ErrorState";
 
-const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || "dummy_key";
-const DUBLIN_CENTER = { lat: 53.3498, lng: -6.2603 };
+const DUBLIN_CENTER: [number, number] = [53.3498, -6.2603];
 
 // Helper to compute a simple centroid from GeoJSON polygon
 function getCentroid(geometry: any) {
@@ -54,7 +54,7 @@ export function MapPage() {
       
       const newScores = { ...scoresCache };
       await Promise.all(
-        toFetch.map(async (area) => {
+        toFetch.map(async (area: any) => {
           try {
             const score = await getAreaScore(area.id);
             newScores[area.id] = score;
@@ -63,7 +63,7 @@ export function MapPage() {
           }
         })
       );
-      setScoresCache(newScores);
+      setScoresCache(newScores as Record<number, AreaScoreOutput>);
     };
     
     fetchScores();
@@ -74,42 +74,45 @@ export function MapPage() {
 
   return (
     <div className="h-screen w-full relative">
-      <APIProvider apiKey={API_KEY}>
-        <Map
-          defaultCenter={DUBLIN_CENTER}
-          defaultZoom={11}
-          mapId="TERRAPULSE_MAP"
-          disableDefaultUI={true}
-        >
-          <LayerToggle activeLayer={activeScoreType} onChange={setActiveScoreType} />
-          
-          <ScoreLayer 
-            areas={areas || []} 
-            activeScoreType={activeScoreType} 
-            scoresCache={scoresCache}
-            onAreaClick={setSelectedAreaId} 
-          />
-          
-          {areas?.map((area) => {
-            const score = scoresCache[area.id];
-            if (score?.needs_human_review) {
-              const centroid = getCentroid(area.geometry);
-              if (centroid) {
-                return (
-                  <AreaMarker 
-                    key={area.id}
-                    lat={centroid.lat} 
-                    lng={centroid.lng} 
-                    needsReview={true} 
-                    onClick={() => setSelectedAreaId(area.id)} 
-                  />
-                );
-              }
+      <LayerToggle activeLayer={activeScoreType} onChange={setActiveScoreType} />
+      
+      <MapContainer
+        center={DUBLIN_CENTER}
+        zoom={11}
+        style={{ height: "100%", width: "100%", zIndex: 0 }}
+        zoomControl={false}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        
+        <ScoreLayer 
+          areas={areas || []} 
+          activeScoreType={activeScoreType} 
+          scoresCache={scoresCache}
+          onAreaClick={setSelectedAreaId} 
+        />
+        
+        {areas?.map((area: any) => {
+          const score = scoresCache[area.id];
+          if (score?.needs_human_review) {
+            const centroid = getCentroid(area.geometry);
+            if (centroid) {
+              return (
+                <AreaMarker 
+                  key={area.id}
+                  lat={centroid.lat} 
+                  lng={centroid.lng} 
+                  needsReview={true} 
+                  onClick={() => setSelectedAreaId(area.id)} 
+                />
+              );
             }
-            return null;
-          })}
-        </Map>
-      </APIProvider>
+          }
+          return null;
+        })}
+      </MapContainer>
       
       {selectedAreaId && (
         <AreaDetailPanel 

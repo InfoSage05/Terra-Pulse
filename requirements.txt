@@ -6,4 +6,7 @@ geoalchemy2
 python-dotenv
 overpy
 pytest
-anthropic>=0.18.0
+openai>=1.0.0
+fastapi>=0.100.0
+uvicorn>=0.23.0
+redis>=5.0.0

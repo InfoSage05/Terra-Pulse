@@ -1,7 +1,8 @@
-import React, { useEffect } from "react";
-import { useMap } from "@vis.gl/react-google-maps";
+import React from "react";
+import { GeoJSON } from "react-leaflet";
 import { AreaDetail, AreaScoreOutput } from "../../types/api";
 import { ScoreType, getColorForScore } from "../../lib/colourScales";
+import { Layer } from "leaflet";
 
 interface ScoreLayerProps {
   areas: AreaDetail[];
@@ -11,72 +12,61 @@ interface ScoreLayerProps {
 }
 
 export function ScoreLayer({ areas, activeScoreType, scoresCache, onAreaClick }: ScoreLayerProps) {
-  const map = useMap();
-
-  useEffect(() => {
-    if (!map) return;
+  
+  const getFeatureStyle = (feature: any) => {
+    const areaId = feature.properties.areaId;
+    const avg_price = feature.properties.avg_price;
+    const scoreData = scoresCache[areaId];
     
-    // Clear existing data
-    map.data.forEach((feature) => map.data.remove(feature));
+    let val = null;
+    if (activeScoreType === "price") val = avg_price;
+    else if (activeScoreType === "affordability" && scoreData) val = scoreData.affordability_score;
+    else if (activeScoreType === "safety" && scoreData) val = scoreData.safety_score;
+    else if (activeScoreType === "livability" && scoreData) val = scoreData.livability_score;
 
-    // Add areas as GeoJSON
-    areas.forEach(area => {
-      if (area.geometry) {
-        try {
-          const geoJsonFeature = {
-            type: "Feature",
-            geometry: area.geometry,
-            properties: {
-              areaId: area.id,
-              name: area.name,
-              avg_price: area.metrics?.avg_price
-            }
-          };
-          map.data.addGeoJson(geoJsonFeature);
-        } catch (e) {
-          console.error("Failed to add GeoJSON for area", area.id, e);
-        }
+    return {
+      fillColor: getColorForScore(activeScoreType, val),
+      weight: 1,
+      opacity: 1,
+      color: 'white',
+      fillOpacity: 0.6
+    };
+  };
+
+  const onEachFeature = (feature: any, layer: Layer) => {
+    const areaId = feature.properties.areaId;
+    layer.on({
+      click: () => {
+        if (areaId) onAreaClick(areaId);
       }
     });
-  }, [map, areas]);
+  };
 
-  useEffect(() => {
-    if (!map) return;
-    
-    // Style the layer based on the active score type
-    map.data.setStyle((feature) => {
-      const areaId = feature.getProperty("areaId");
-      const avg_price = feature.getProperty("avg_price");
-      const scoreData = scoresCache[areaId];
-      
-      let val = null;
-      if (activeScoreType === "price") val = avg_price;
-      else if (activeScoreType === "affordability" && scoreData) val = scoreData.affordability_score;
-      else if (activeScoreType === "safety" && scoreData) val = scoreData.safety_score;
-      else if (activeScoreType === "livability" && scoreData) val = scoreData.livability_score;
+  return (
+    <>
+      {areas.map(area => {
+        if (!area.geometry) return null;
+        
+        const geoJsonFeature = {
+          type: "Feature" as const,
+          geometry: area.geometry,
+          properties: {
+            areaId: area.id,
+            name: area.name,
+            avg_price: area.metrics?.avg_price
+          }
+        };
 
-      return {
-        fillColor: getColorForScore(activeScoreType, val),
-        fillOpacity: 0.6,
-        strokeColor: "#ffffff",
-        strokeWeight: 1,
-        zIndex: 1
-      };
-    });
-  }, [map, activeScoreType, scoresCache]);
-
-  useEffect(() => {
-    if (!map) return;
-    
-    const clickListener = map.data.addListener("click", (e: any) => {
-      const areaId = e.feature.getProperty("areaId");
-      if (areaId) onAreaClick(areaId);
-    });
-
-    return () => {
-      google.maps.event.removeListener(clickListener);
-    };
-  }, [map, onAreaClick]);
-
-  return null;
+        // We use a unique key combining area id and active score type so React completely re-renders the GeoJSON component when styles change
+        return (
+          <GeoJSON 
+            key={`${area.id}-${activeScoreType}`} 
+            data={geoJsonFeature} 
+            style={getFeatureStyle}
+            onEachFeature={onEachFeature}
+          />
+        );
+      })}
+    </>
+  );
 }

@@ -1,9 +1,9 @@
 import os
 import json
 import logging
-from typing import Type, TypeVar, Any
+from typing import Type, TypeVar
 from pydantic import BaseModel, ValidationError
-import anthropic
+from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -11,19 +11,26 @@ T = TypeVar('T', bound=BaseModel)
 
 class LLMClient:
     """
-    Thin wrapper around the Anthropic API client.
+    Thin wrapper around the OpenAI-compatible API client (OpenRouter/Groq).
     Handles the API call, retries on transient errors, and enforces JSON-only output.
     """
     
-    def __init__(self, model_name: str = "claude-3-5-sonnet-20240620"):
+    def __init__(self, model_name: str = "meta-llama/llama-3-8b-instruct:free"):
         self.model_name = model_name
         
         # Check for API key
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GROQ_API_KEY")
         if not api_key:
-            logger.warning("ANTHROPIC_API_KEY is not set. API calls will fail unless mocked.")
+            logger.warning("OPENROUTER_API_KEY / GROQ_API_KEY is not set. API calls will fail unless mocked.")
+            api_key = "dummy_key_for_mocking"
             
-        self.client = anthropic.Anthropic(api_key=api_key)
+        # Configure base_url based on which key is present (assuming OpenRouter by default)
+        base_url = "https://openrouter.ai/api/v1" if os.environ.get("OPENROUTER_API_KEY") else "https://api.groq.com/openai/v1"
+        
+        self.client = OpenAI(
+            base_url=base_url,
+            api_key=api_key
+        )
 
     def _clean_json_response(self, text: str) -> str:
         """Strip markdown fences from response if present."""
@@ -56,20 +63,21 @@ Schema:
         for attempt in range(retry_count + 1):
             try:
                 # If we don't have an API key, we should not attempt a real call.
-                # Here we could raise an error or return None.
-                if not os.environ.get("ANTHROPIC_API_KEY"):
-                    raise ValueError("Missing ANTHROPIC_API_KEY")
+                if not (os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GROQ_API_KEY")):
+                    raise ValueError("Missing API Key (OPENROUTER_API_KEY or GROQ_API_KEY)")
 
-                response = self.client.messages.create(
+                response = self.client.chat.completions.create(
                     model=self.model_name,
-                    max_tokens=1024,
-                    system=system_prompt,
                     messages=[
+                        {"role": "system", "content": system_prompt},
                         {"role": "user", "content": current_prompt}
-                    ]
+                    ],
+                    # Fallback model parameters, might be overridden by specific API rules
+                    max_tokens=1024,
+                    temperature=0.0
                 )
                 
-                raw_text = response.content[0].text
+                raw_text = response.choices[0].message.content or ""
                 clean_json = self._clean_json_response(raw_text)
                 
                 # Try to parse and validate
