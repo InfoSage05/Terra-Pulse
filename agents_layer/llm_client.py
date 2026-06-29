@@ -1,9 +1,10 @@
 import os
 import json
 import logging
+import time
 from typing import Type, TypeVar
 from pydantic import BaseModel, ValidationError
-from openai import OpenAI
+from openai import OpenAI, APIError, APIConnectionError, RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ Schema:
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": current_prompt}
                     ],
-                    # Fallback model parameters, might be overridden by specific API rules
+                    response_format={"type": "json_object"},
                     max_tokens=1024,
                     temperature=0.0
                 )
@@ -95,9 +96,22 @@ Schema:
                 logger.warning(f"Attempt {attempt + 1}: {error_msg}")
                 current_prompt = prompt + f"\n\nPrevious attempt failed schema validation: {e}. Fix the structure to match the schema exactly."
                 
+            except RateLimitError as e:
+                logger.warning(f"Attempt {attempt + 1}: RateLimitError: {e}. Sleeping 5 seconds.")
+                time.sleep(5)
+                # Keep current_prompt to retry
+                
+            except APIConnectionError as e:
+                logger.warning(f"Attempt {attempt + 1}: APIConnectionError: {e}. Sleeping 2 seconds.")
+                time.sleep(2)
+                
+            except APIError as e:
+                logger.error(f"OpenAI API Error: {e}")
+                # For general API errors, break immediately as they might be auth/bad-request
+                break
+                
             except Exception as e:
                 logger.error(f"LLM API call failed: {e}")
-                # Don't retry on Auth/Network errors for this simple wrapper
                 break
                 
         logger.error(f"Failed to generate valid structured data after {retry_count + 1} attempts.")

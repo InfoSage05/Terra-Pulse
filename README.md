@@ -6,27 +6,27 @@ TerraPulse is an agentic AI platform for analyzing housing prices and neighborho
 
 TerraPulse is built on a 5-layer pipeline:
 1. **Ingestion & Storage**: Postgres + PostGIS database populated by robust Python ETL connectors.
-2. **Agents Layer**: An LLM-powered pipeline that extracts qualitative summaries and flags contradictions (`needs_human_review`).
+2. **Agents Layer**: An LLM-powered pipeline that extracts qualitative summaries and flags contradictions (`needs_human_review`). It leverages an OpenAI-compatible client configured by default to use open-source models via OpenRouter or Groq.
 3. **Models Layer**: Offline/batch generation of Price Predictions (LightGBM) and formula-based Affordability/Safety scores.
 4. **Backend**: FastAPI providing typed, read-only endpoints for the map.
-5. **Frontend**: A React, Vite, and Leaflet (OpenStreetMap) application visualizing the data.
+5. **Frontend**: A React, Vite, and Leaflet (OpenStreetMap) application visualizing the data. No proprietary map API keys are required.
 
 *For complete details, see [docs/architecture.md](docs/architecture.md).*
 
 ## Prerequisites
 
 - **Docker & Docker Compose** (for running the stack locally)
-- **Anthropic/OpenAI API Key** (for the Agent pipeline)
+- **OpenRouter API Key** (for running the open-source Agent pipeline, easily swappable to Groq or others)
 
 ## Quickstart
 
 Follow these exact steps to start the application from a clean clone.
 
 1. **Configure Environment**
-   Copy the example environment file and fill in your API keys:
+   Copy the example environment file and fill in your API key:
    ```bash
    cp .env.example .env
-   # Edit .env and set ANTHROPIC_API_KEY and VITE_GOOGLE_MAPS_KEY
+   # Edit .env and set OPENROUTER_API_KEY
    ```
 
 2. **Start the Stack**

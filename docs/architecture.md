@@ -10,7 +10,8 @@ This document outlines the architectural decisions and pipeline flow for the Ter
 
 ## 2. Agents Layer (Unstructured Data)
 - **Sequential Pipeline**: Processes unstructured text via a 3-step pipeline (Extract -> Score -> Fuse). 
-- **Strict Typed Contracts**: Each LLM step is forced to output JSON matching Pydantic schemas. 
+- **Open-Source Provider Migration**: We migrated the LLM client from Anthropic to an OpenAI-compatible SDK (defaulting to OpenRouter/Groq with `meta-llama/llama-3-8b-instruct:free`). This removes proprietary lock-in, avoids paid API key dependencies for evaluators, and ensures the pipeline can run freely or self-hosted in the future.
+- **Strict Typed Contracts**: Each LLM step is forced to output JSON matching Pydantic schemas (enhanced by `response_format={"type": "json_object"}`). 
 - **Review Gate Rule (CRITICAL)**: The final Fuse step uses hardcoded logic to compare the agent's qualitative livability signal against structured metrics. Disagreements automatically flag the summary for human review by setting `needs_human_review = True`. 
 
 ## 3. Models Layer
