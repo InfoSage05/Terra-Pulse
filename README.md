@@ -6,7 +6,7 @@ TerraPulse is an agentic AI platform for analyzing housing prices and neighborho
 
 TerraPulse is built on a 5-layer pipeline:
 1. **Ingestion & Storage**: Postgres + PostGIS database populated by robust Python ETL connectors.
-2. **Agents Layer**: An LLM-powered pipeline that extracts qualitative summaries and flags contradictions (`needs_human_review`). It leverages an OpenAI-compatible client configured by default to use open-source models via OpenRouter or Groq.
+2. **Agents Layer**: An LLM-powered pipeline that extracts qualitative summaries and flags contradictions (`needs_human_review`). It leverages an OpenAI-compatible client configured by default to use open-source models via OpenRouter or Groq. The client features **exponential backoff for rate-limit handling** and strict **JSON-mode structured parsing** to ensure high reliability even on free-tier, open-source models.
 3. **Models Layer**: Offline/batch generation of Price Predictions (LightGBM) and formula-based Affordability/Safety scores.
 4. **Backend**: FastAPI providing typed, read-only endpoints for the map.
 5. **Frontend**: A React, Vite, and Leaflet (OpenStreetMap) application visualizing the data. No proprietary map API keys are required.
