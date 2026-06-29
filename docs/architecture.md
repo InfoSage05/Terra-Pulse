@@ -44,3 +44,8 @@ eeds_human_review = True).
 - **API Interface**: A strict REST API serves area data, price predictions (`POST /v1/predict/price`), and structured area scores (`GET /v1/areas/{id}/score`).
 - **Review Gate Passthrough**: The `/v1/areas/{id}/score` endpoint preserves the `needs_human_review` boolean from Phase 2 unstructured processing. It must never silently average a flagged signal into a clean score.
 - **Stateless Inference**: Endpoints run fast inference on-request by querying active models directly from the file registry.
+
+## Frontend Layer (React & Google Maps)
+- **Map View Architecture**: Powered by React, Vite, TailwindCSS, and `@vis.gl/react-google-maps`. `MapPage.tsx` manages the state for active overlays and selected area detail side-panel.
+- **Choropleth Visualisation**: Generic `ScoreLayer.tsx` dynamically colors GeoJSON polygons fetched from PostGIS based on one of four scores: Price, Affordability, Safety, or Livability.
+- **Review Flag Rule**: To fulfill the contract from Phase 2/3, any area where `needs_human_review = True` receives an unmissable visual warning marker both on the map directly (`AreaMarker.tsx`) and within the side panel (`ReviewFlagBanner.tsx`), explicitly stating that qualitative data disagrees with hard metrics.

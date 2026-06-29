@@ -2,19 +2,28 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Dict, Any, Optional
 
+import json
+
 def get_areas(db: Session, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
     query = text("""
-        SELECT id, name, area_type, county
+        SELECT id, name, area_type, county, ST_AsGeoJSON(geometry) as geometry
         FROM areas
         ORDER BY id
         LIMIT :limit OFFSET :offset
     """)
     result = db.execute(query, {"limit": limit, "offset": offset})
-    return [dict(row._mapping) for row in result]
+    
+    areas = []
+    for row in result:
+        row_dict = dict(row._mapping)
+        if row_dict.get("geometry"):
+            row_dict["geometry"] = json.loads(row_dict["geometry"])
+        areas.append(row_dict)
+    return areas
 
 def get_area_by_id(db: Session, area_id: int) -> Optional[Dict[str, Any]]:
     query = text("""
-        SELECT id, name, area_type, county
+        SELECT id, name, area_type, county, ST_AsGeoJSON(geometry) as geometry
         FROM areas
         WHERE id = :area_id
     """)
@@ -47,6 +56,9 @@ def get_area_by_id(db: Session, area_id: int) -> Optional[Dict[str, Any]]:
     metrics = db.execute(metrics_query, {"area_id": area_id}).first()
     
     area_dict = dict(result._mapping)
+    if area_dict.get("geometry"):
+        area_dict["geometry"] = json.loads(area_dict["geometry"])
+        
     if metrics:
         area_dict["metrics"] = dict(metrics._mapping)
     return area_dict
