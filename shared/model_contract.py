@@ -38,5 +38,16 @@ class AreaScoreOutput(BaseModel):
     livability_score: Optional[float]       # blends structured score + agent livability_signal
     livability_confidence: Optional[float]  # carried through from area_agent_summaries.confidence
     needs_human_review: bool             # carried through from Phase 2's flag
+    agent_summary: Optional[str] = None    # unstructured agent-generated summary text
     model_versions_used: Dict[str, str]   # which model version produced each sub-score
     last_updated: datetime
+
+class PropertyListing(BaseModel):
+    id: int
+    area_id: int
+    address_raw: str
+    price_eur: float
+    sale_date: str
+    property_type: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None

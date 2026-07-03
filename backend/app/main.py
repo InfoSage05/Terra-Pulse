@@ -8,7 +8,7 @@ from backend.app.core.config import settings
 from backend.app.core.security import get_api_key
 from backend.app.middleware.rate_limit import limiter
 from backend.app.middleware.request_logging import RequestLoggingMiddleware
-from backend.app.api.v1 import areas, scores, predict
+from backend.app.api.v1 import areas, scores, predict, properties
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -32,5 +32,6 @@ api_router = APIRouter(dependencies=[Depends(get_api_key)])
 api_router.include_router(areas.router, prefix="/areas", tags=["areas"])
 api_router.include_router(scores.router, prefix="/areas", tags=["scores"])
 api_router.include_router(predict.router, prefix="/predict", tags=["predict"])
+api_router.include_router(properties.router, prefix="/properties", tags=["properties"])
 
 app.include_router(api_router, prefix=settings.API_V1_STR)

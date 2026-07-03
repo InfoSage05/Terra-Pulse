@@ -34,7 +34,7 @@ def get_area_score(db: Session, area_id: int) -> Optional[AreaScoreOutput]:
             SELECT population, deprivation_index FROM area_demographics WHERE area_id = :area_id ORDER BY year DESC LIMIT 1
         ),
         agent_summary AS (
-            SELECT livability_signal, confidence, needs_human_review FROM area_agent_summaries WHERE area_id = :area_id ORDER BY ingested_at DESC LIMIT 1
+            SELECT livability_signal, confidence, needs_human_review, summary FROM area_agent_summaries WHERE area_id = :area_id ORDER BY ingested_at DESC LIMIT 1
         )
         SELECT 
             COALESCE((SELECT avg_price FROM price_agg), 0) as avg_price,
@@ -43,7 +43,8 @@ def get_area_score(db: Session, area_id: int) -> Optional[AreaScoreOutput]:
             (SELECT deprivation_index FROM demo_latest) as deprivation_index,
             (SELECT livability_signal FROM agent_summary) as livability_signal,
             (SELECT confidence FROM agent_summary) as agent_confidence,
-            (SELECT needs_human_review FROM agent_summary) as needs_human_review
+            (SELECT needs_human_review FROM agent_summary) as needs_human_review,
+            (SELECT summary FROM agent_summary) as agent_summary
     """)
     
     row = db.execute(query, {"area_id": area_id}).first()
@@ -55,6 +56,7 @@ def get_area_score(db: Session, area_id: int) -> Optional[AreaScoreOutput]:
             livability_score=None,
             livability_confidence=None,
             needs_human_review=False,
+            agent_summary=None,
             model_versions_used=versions,
             last_updated=datetime.now()
         )
@@ -66,6 +68,7 @@ def get_area_score(db: Session, area_id: int) -> Optional[AreaScoreOutput]:
     liv_signal = row.livability_signal
     agent_conf = row.agent_confidence
     needs_review = row.needs_human_review if row.needs_human_review is not None else False
+    agent_summary = row.agent_summary if hasattr(row, 'agent_summary') else None
     
     aff_score = None
     if affordability_meta and avg_price > 0 and dep_index is not None:
@@ -88,6 +91,7 @@ def get_area_score(db: Session, area_id: int) -> Optional[AreaScoreOutput]:
         livability_score=liv_score,
         livability_confidence=agent_conf,
         needs_human_review=needs_review,
+        agent_summary=agent_summary,
         model_versions_used=versions,
         last_updated=datetime.now()
     )

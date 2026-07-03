@@ -1,163 +1,282 @@
-# AGENTS.md — Phase 6: Provider Migration Verification & Hardening
+# AGENTS.md — Phase 7: Zillow-Style UI + Full Stack Verification
 
-This extends Phases 1-5. Two significant swaps just happened: the agent layer's LLM
-client moved from the Anthropic SDK to the OpenAI SDK (targeting OpenRouter/Groq,
-open-source models), and the frontend's map moved from Google Maps to Leaflet+OSM. The
-goal of removing API key dependencies is good and worth keeping. This phase exists
-because a provider swap of this size touches contracts that were written assuming the
-old providers' specific behaviour — find and fix what those swaps quietly broke before
-building anything new on top of them.
+## CRITICAL: Read this before writing a single line of code
 
-**This phase verifies and hardens. It does not add new features.** If you find a real
-gap that needs new code (e.g. a retry strategy that didn't exist before), write the
-minimum needed to close it, and tell me clearly what was missing and why.
+The frontend has never successfully connected to a real backend with real data. Docker is
+not installed on the development machine. Postgres has never run. The backend has never
+served a real API response. Before building any new UI, you must get the full stack
+actually running and verified. A Zillow-style frontend connected to nothing is worthless.
+Do the steps in Section 0 first, completely, before touching any frontend code.
 
 ---
 
-## 1. LLM client migration — what to verify
+## 0. Get the stack running — mandatory gate before any UI work
 
-### 1.1 Structured output reliability (the biggest real risk)
-Open-source models served via OpenRouter/Groq are generally less reliable than Claude at
-returning strict, schema-valid JSON on the first try — this was a soft assumption baked
-into Phases 2 and 3 ("retry once, then dead-letter") when the underlying model was
-Claude. Re-verify this assumption is still good enough, or tighten it:
+### 0.1 Install Docker Desktop
+Docker Desktop must be installed and running before anything else.
+- Download: https://www.docker.com/products/docker-desktop/
+- Run the installer, accept WSL 2, restart the machine when prompted
+- After restart, open Docker Desktop and wait for the engine to fully start
+- Verify in a new terminal:
+```bash
+docker --version
+docker compose version
+```
+Both must return version strings, not errors. Do not proceed past this point until
+they do.
 
-- Run the Phase 2 extract/score steps against the actual model now configured (whichever
-  specific OpenRouter/Groq model was chosen — name it explicitly in your report to me)
-  across a reasonable sample (e.g. 20-30 real text inputs already in the dataset) and
-  report: what % pass schema validation on the first attempt, what % pass after the
-  existing one retry, what % end up dead-lettered.
-- If first-attempt pass rate is materially worse than it likely was with Claude, do ONE
-  of the following — pick the smallest fix that gets reliability back to an acceptable
-  level (define "acceptable" as >90% reaching valid output within the existing retry
-  budget), and tell me which you chose and why:
-  - Tighten the prompt's JSON-only instruction (some open models respond better to
-    explicit few-shot examples of the exact schema than Claude needed)
-  - Check whether the chosen OpenRouter/Groq model supports a native "JSON mode" or
-    function-calling/tool-use parameter — if so, use it instead of relying purely on
-    prompt instructions, since constrained decoding is much more reliable than
-    instruction-following alone
-  - If neither closes the gap, increase the retry budget from 1 to 2, but log this
-    explicitly as a cost/latency tradeoff in `docs/architecture.md`
-- Do NOT silently lower the bar by loosening the Pydantic schema to accept more
-  permissive output — the schema represents what Phase 3 and Phase 4 actually need
-  downstream; loosening it just moves the failure further down the pipeline.
+### 0.2 Start the database
+From the repo root:
+```bash
+docker compose up -d postgres redis
+docker compose ps
+```
+`postgres` must show as `healthy` before proceeding. If it shows `starting` or
+`unhealthy`, check logs:
+```bash
+docker compose logs postgres
+```
+Fix any issues (missing env vars in `.env`, port conflicts, etc.) before moving on.
 
-### 1.2 Model traceability fields
-`ModelMetadata.model_name` (Phase 3) and any place Phase 2 logs `model_name` per
-`area_agent_summaries` row need to now log the REAL model identifier from the new
-provider (e.g. the actual OpenRouter model slug, not a leftover "claude-..." string from
-before the migration). Check every place a model name is logged or displayed (including
-the frontend's `PricePredictorWidget` model-version display from Phase 4) and confirm
-none of them still reference Anthropic model names as a stale default or fallback value.
+### 0.3 Run migrations and seed areas
+```bash
+docker compose exec postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -f /dev/stdin < storage/migrations/001_init_postgis.sql
+# ... run migrations 002 through 007 in order
+python storage/seeds/seed_areas.py
+```
+Then verify real rows exist:
+```bash
+docker compose exec postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c "SELECT id, name, area_type FROM areas LIMIT 10;"
+```
+If this returns 0 rows, seed_areas.py did not work — fix it before continuing.
 
-### 1.3 Error handling differences
-The OpenAI SDK's error types, rate-limit behaviour, and timeout defaults differ from the
-Anthropic SDK's. Re-check `agents_layer/llm_client.py`'s retry-on-transient-error logic
-(built in Phase 2) actually catches the right exception types for the OpenAI SDK, not
-leftover Anthropic exception handling that now silently fails to catch anything.
+### 0.4 Run ingestion for at least one real source
+At minimum, run the PPR connector to get real property_sales rows:
+```bash
+python ingestion/jobs/run_ingestion.py --source ppr
+```
+Verify:
+```bash
+docker compose exec postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c "SELECT count(*) FROM property_sales;"
+```
+Must return a non-zero count. If it returns 0, the connector did not write data —
+check dead_letter logs and fix before continuing.
 
-### 1.4 Cost/rate-limit behaviour
-Free tiers on OpenRouter/Groq typically have tighter rate limits than a paid Anthropic
-key. Check whether `run_agent_pipeline.py`'s batch processing (Phase 2) needs throttling
-added to stay within the new provider's free-tier limits, and report what those limits
-actually are for whichever provider/model was chosen.
+### 0.5 Start and verify the backend
+```bash
+python -m uvicorn backend.app.main:app --reload --port 8000
+```
+Then confirm these three endpoints return real data (not errors, not empty arrays):
+- `GET http://localhost:8000/v1/areas` — must return a list of area objects
+- `GET http://localhost:8000/v1/areas/1` — must return a single area with real fields
+- `GET http://localhost:8000/v1/areas/1/score` — may return null score fields if
+  models haven't run yet, but must not return a 404 or 500
 
----
+**Do not start Section 1 until all three of these return real, non-error responses.**
+Report exactly what each returns before moving forward.
 
-## 2. Frontend mapping migration — what to verify
+### 0.6 Add the property listings endpoint (new backend work)
+The Zillow-style UI requires a property listings feed — individual properties with
+price, address, beds/baths, property type — not just area-level aggregates. Check
+whether `GET /v1/properties` exists already. If not, add it now in
+`backend/app/api/v1/properties.py`:
 
-### 2.1 Component-level re-check against Phase 4's spec
-Confirm each of these still does what Phase 4 specified, now on Leaflet instead of
-Google Maps:
+```python
+# GET /v1/properties
+# Query params: area_id (optional), min_price, max_price, property_type, limit, offset
+# Returns: paginated list of PropertyListing objects from property_sales table
+# Each item: id, area_id, address_raw, price_eur, sale_date, property_type (if available)
+```
 
-- `MapContainer.tsx` — mounts a Leaflet map with an OSM tile layer; confirm tile
-  attribution is correctly displayed (OSM's licence requires visible attribution — check
-  it's actually showing, this is a real licence requirement, not just a nice-to-have)
-- `ScoreLayer.tsx` — choropleth rendering via Leaflet's GeoJSON layer with a `style`
-  function driven by score value, NOT a re-implementation of the colour-scale logic;
-  confirm `lib/colourScales.ts` from Phase 4 is still the single source of colour logic,
-  reused as-is, not duplicated for Leaflet
-- `AreaMarker.tsx` — Leaflet markers/popups instead of Google Maps markers; confirm
-  click-to-open-detail-panel behaviour still works identically to Phase 4's spec
-- The `needs_human_review` warning marker (Phase 4, Section 4) — confirm this still
-  renders distinctly and visibly on the Leaflet map; this is the project's headline
-  feature and migrations are exactly when such details get silently dropped — check it
-  explicitly, do not assume it carried over
-- Null-score "no data" area styling (Phase 4, Section 5) — confirm still distinct from
-  zero and from missing areas under Leaflet's styling model
+Add the corresponding Pydantic response model to `shared/model_contract.py`:
+```python
+class PropertyListing(BaseModel):
+    id: int
+    area_id: int
+    address_raw: str
+    price_eur: float
+    sale_date: str
+    property_type: str | None
+    lat: float | None
+    lon: float | None
+```
 
-### 2.2 GeoJSON handoff
-Phase 5 had the backend serving PostGIS geometry as GeoJSON specifically for Google
-Maps' choropleth rendering. Leaflet consumes GeoJSON natively, so this should mostly
-just work — but confirm the GeoJSON the backend serves doesn't have any Google-Maps-
-specific formatting assumptions baked in (e.g. coordinate order — GeoJSON spec is
-[longitude, latitude], confirm the backend wasn't accidentally serving
-[latitude, longitude] to match something Google Maps tolerated but Leaflet won't).
-
-### 2.3 Config and key cleanup
-Since the explicit goal was removing API key dependencies:
-- Remove `VITE_GOOGLE_MAPS_KEY` from `.env.example` and any code that reads it
-- Confirm `npm run build` and `npm run dev` genuinely require zero API keys end-to-end
-  now, as claimed — verify by actually running both from a `.env` with only DB/backend
-  config and no map/LLM keys, and report if anything still silently expects one
-- Update `README.md`'s prerequisites section (Phase 5) to remove the Google Maps API key
-  requirement and add whatever OpenRouter/Groq key (if any is still needed — some Groq
-  free tier usage requires a free API key even if there's no cost) is now required instead
-
----
-
-## 3. Re-run the Phase 5 integration checks that this migration could have broken
-
-Specifically re-verify these two from Phase 5's list, since they're the ones most likely
-disturbed by today's changes:
-
-- **Contract drift check**: re-diff `frontend/src/types/api.ts` against
-  `shared/model_contract.py` — confirm `model_name`/`model_version` typing didn't drift
-  when the restored Vite/React config files were added back.
-- **Review-gate end-to-end check**: confirm, live, in the running app, that an area with
-  `needs_human_review = true` still produces a visible warning marker on the new Leaflet
-  map and a banner in the detail panel. State explicitly in your report whether you
-  verified this with a real flagged area or a manually seeded test case.
+This endpoint is what powers the right-side property list in the UI. Verify it returns
+real rows before moving to Section 1.
 
 ---
 
-## 4. What "done" looks like for this phase
+## 1. The target UI — what to build
 
-- [ ] Structured-output pass rate for the new LLM provider is measured and reported
-      (Section 1.1), with a concrete fix applied if the rate was poor
-- [ ] No stale Anthropic model name strings remain anywhere in logs, defaults, the
-      database, or the frontend display (Section 1.2)
-- [ ] `llm_client.py`'s error handling correctly matches OpenAI SDK exception types
-      (Section 1.3)
-- [ ] New provider's rate limits are documented and respected by the batch pipeline
-      (Section 1.4)
-- [ ] OSM tile attribution is visibly displayed on the map (licence requirement)
-- [ ] Colour scale logic confirmed still single-sourced, not duplicated for Leaflet
-- [ ] The `needs_human_review` warning marker is confirmed visible on the live Leaflet
-      map for a real or seeded flagged area
-- [ ] GeoJSON coordinate order confirmed correct for Leaflet (lon, lat)
-- [ ] `npm run dev` and `npm run build` confirmed to require zero API keys, verified by
-      an actual run with a stripped `.env`
-- [ ] `.env.example` and `README.md` updated to reflect the real, current key
-      requirements (likely: none for maps, possibly one free-tier key for the LLM
-      provider)
-- [ ] `docs/architecture.md` updated: replace references to Anthropic/Google Maps with
-      the actual current providers, and add a short "why we moved to free/open-source
-      providers" note since this is a legitimate, explainable design decision worth
-      documenting rather than hiding
+Reference: Zillow.com's search interface. The layout is:
+- Left half: interactive map (Leaflet, already built) showing property markers
+- Right half: scrollable list of property cards with filters at the top
+- The two sides are linked: panning/clicking the map filters the list; clicking a card
+  highlights/zooms to that property on the map
+
+This replaces or extends the current `MapPage.tsx`. Do not delete the existing
+choropleth score layer functionality — it stays as a toggleable overlay. The new
+Zillow-style view is the default landing experience.
 
 ---
 
-## 5. Working agreement
+## 2. Layout structure
 
-- If structured-output reliability from the new LLM provider is poor even after the
-  fixes in Section 1.1, stop and tell me the actual pass-rate numbers rather than quietly
-  shipping a degraded agent layer — this is a real quality tradeoff of the free-model
-  decision and I should know the size of it.
-- If the OSM/Leaflet licence attribution requirement conflicts with any UI design
-  decision from Phase 4, keep the attribution and adjust the design — this is a real
-  legal requirement, not a style preference.
-- Report back which specific OpenRouter/Groq model and which specific map tile provider
-  ended up configured — these decisions should be explicit and known, not buried in a
-  default config value nobody chose deliberately.
+```
+frontend/src/
+├── pages/
+│   └── SearchPage.tsx          # new main page replacing or wrapping MapPage
+├── components/
+│   ├── layout/
+│   │   ├── SplitLayout.tsx     # left/right split — map takes 55% width, list 45%
+│   │   │                         #   on desktop. On mobile, stacks vertically with a
+│   │   │                         #   toggle between map view and list view
+│   │   └── SearchHeader.tsx     # top bar: location search input + filter controls
+│   ├── map/
+│   │   ├── MapContainer.tsx     # extend existing — add PropertyMarker layer
+│   │   └── PropertyMarker.tsx   # individual property pin on the map, shows price
+│   │                              #   label on the marker itself (like Zillow's red
+│   │                              #   price bubbles), highlights on hover/select
+│   ├── listings/
+│   │   ├── ListingsPanel.tsx    # right-side scrollable panel
+│   │   ├── PropertyCard.tsx     # individual card: address, price, sale date,
+│   │   │                          #   property type badge, area name — no photos
+│   │   │                          #   (we don't have images in our data), clean
+│   │   │                          #   text-based card instead
+│   │   ├── ListingsCount.tsx    # "X properties found" header above the list,
+│   │   │                          #   updates live as filters change
+│   │   └── LoadMoreButton.tsx   # pagination — load next page of results,
+│   │                              #   do not infinite-scroll (simpler, more reliable)
+│   └── filters/
+│       ├── FilterBar.tsx        # horizontal filter bar below the search header:
+│       │                          #   Price range | Property type | Date range | Sort by
+│       ├── PriceRangeFilter.tsx # min/max price inputs
+│       ├── PropertyTypeFilter.tsx # dropdown: All / Residential / Apartment / House
+│       └── SortControl.tsx      # sort by: Price (low-high) | Price (high-low) |
+│                                   #   Most recent | Area score
+```
+
+---
+
+## 3. Data flow and state
+
+Use a single `useSearchState` hook that holds:
+```typescript
+interface SearchState {
+  mapBounds: LatLngBounds | null   // current map viewport bounds
+  selectedAreaId: number | null
+  selectedPropertyId: number | null
+  filters: {
+    minPrice: number | null
+    maxPrice: number | null
+    propertyType: string | null
+    sortBy: 'price_asc' | 'price_desc' | 'recent' | 'score'
+  }
+  page: number
+}
+```
+
+- When `mapBounds` changes (user pans/zooms), re-fetch `/v1/properties` with the new
+  bounding box — properties outside the current viewport are not shown in the list
+- When a filter changes, reset `page` to 0 and re-fetch
+- When a property card is clicked, set `selectedPropertyId`, fly the map to that
+  property's coordinates, and highlight its marker
+- When a map marker is clicked, set `selectedPropertyId` and scroll the corresponding
+  card into view in the list panel
+- The map's choropleth score overlay (from Phase 4) is toggled by a layer control in
+  the top-right of the map — it coexists with the property markers, it is not replaced
+  by them
+
+---
+
+## 4. Map marker behaviour (the Zillow price-bubble pattern)
+
+- Each property visible in the current map bounds gets a marker showing its price
+  (e.g. "€320K") as a small pill/bubble label
+- Unselected: white background, dark border, small font
+- Hovered: slightly larger, shadow
+- Selected (clicked): filled dark background, white text
+- If more than ~200 markers would appear at the current zoom level, cluster them
+  (Leaflet.markercluster) showing a count bubble instead — do not render 2000 individual
+  markers at country zoom level, it will freeze the browser
+- Properties flagged with `needs_human_review` on their area get a small warning icon
+  appended to their price bubble — this preserves the Phase 2/3/4 review-gate
+  visibility at the individual property level, not just at the area choropleth level
+
+---
+
+## 5. Property card design (text-based, no photos)
+
+Since our data doesn't include property photos, the card must look intentionally clean
+rather than like a broken Zillow card with missing images. Design:
+
+```
+┌─────────────────────────────────────┐
+│ €320,000                    [Badge] │  ← price prominent, property type badge
+│ 14 Griffith Avenue, Dublin 9        │  ← address
+│ Dublin 9 · Sold Jan 2024            │  ← area name + sale date
+│ ──────────────────────────────────  │
+│ Safety 78  Afford. 65  Live. 71     │  ← area scores if available, muted if null
+│                          [⚠ Review] │  ← only shown if needs_human_review = true
+└─────────────────────────────────────┘
+```
+
+- Price is the largest text element
+- Area scores shown small at the bottom — pull from the area's `/v1/areas/{id}/score`
+  response, cached per area_id (don't re-fetch per card, one fetch per unique area_id
+  visible in the current page)
+- The `⚠ Review` flag is only shown if `needs_human_review` is true — same rule as
+  everywhere else in the project, never hidden
+
+---
+
+## 6. Filter behaviour
+
+- All filters are applied as query parameters to `GET /v1/properties`
+- Changing any filter triggers an immediate re-fetch (debounced 300ms for price inputs
+  to avoid firing on every keystroke)
+- Active filters are visually indicated (filled/highlighted state on filter controls)
+- A "Clear all filters" button resets to defaults
+- The current filter state should be reflected in the URL query string
+  (e.g. `?minPrice=200000&propertyType=house`) so the search is shareable/bookmarkable
+  — use React Router's `useSearchParams` for this
+
+---
+
+## 7. What "done" looks like for this phase
+
+- [ ] Section 0 fully complete: Docker running, Postgres healthy, real rows in
+      `property_sales` and `areas`, backend `/v1/areas` and `/v1/properties` returning
+      real data, not errors — **verified by actually calling the endpoints**, not assumed
+- [ ] Split layout renders correctly: map left, listings right, responsive on mobile
+- [ ] Property markers show price bubbles on the map for properties in the current
+      viewport
+- [ ] Clicking a marker scrolls to and highlights the corresponding card in the list
+- [ ] Clicking a card flies the map to that property and highlights its marker
+- [ ] Filter bar works: price range and property type filter the list and map markers
+- [ ] URL reflects filter state — sharing the URL reproduces the same search
+- [ ] Area score line in the property card shows real scores (or "—" for null), fetched
+      once per unique area_id, not once per card
+- [ ] `needs_human_review` warning appears on both the map marker and the property card
+      for any flagged property's area — verified with a real or seeded flagged case
+- [ ] Choropleth score overlay still toggleable and functional alongside the new
+      property markers
+- [ ] `ListingsCount` updates correctly when filters change or map is panned
+- [ ] No browser freeze at low zoom levels — marker clustering kicks in above ~200
+      visible markers
+
+---
+
+## 8. Working agreement
+
+- Do not start Section 1 until Section 0 is verified complete with real data. Report
+  the actual output of each verification step before proceeding. This is non-negotiable
+  — a beautiful UI on top of a broken backend is not progress.
+- If `/v1/properties` doesn't exist yet and needs to be added (Section 0.6), fix the
+  backend first and confirm it returns real rows before building the frontend against it.
+- Do not add property photos or image placeholders — we don't have image data, and a
+  deliberately clean text-based card is better than broken image elements.
+- If marker clustering library (Leaflet.markercluster) causes any Vite/TypeScript
+  import issues, tell me before spending time fighting it — there are known type-
+  definition workarounds for this library.
+- Report the Section 0 verification results to me before writing any Section 1 code.
