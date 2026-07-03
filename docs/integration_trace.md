@@ -46,8 +46,8 @@ Querying `GET /v1/areas/1/score` returns the aggregated JSON exactly matching th
 ```
 *Crucially, `needs_human_review: true` passed through unmodified.*
 
-## 6. Frontend Layer (React + Google Maps)
-- **Map View**: The polygon for Dublin 1 is rendered on the Google Map via the `/v1/areas` GeoJSON. It receives the `AreaMarker.tsx` overlay (Warning icon) because the background scores cache identifies `needs_human_review` as true.
+## 6. Frontend Layer (React + Leaflet / OpenStreetMap)
+- **Map View**: The polygon for Dublin 1 is rendered on the Leaflet map via the `/v1/areas` GeoJSON. It receives the `AreaMarker.tsx` overlay (Warning icon) because the background scores cache identifies `needs_human_review` as true.
 - **Detail Panel**: Clicking the area opens `AreaDetailPanel.tsx`. The `ReviewFlagBanner.tsx` is prominently displayed in red at the top. The Price Predictor Widget correctly shows `€350,000` with its interval and the model version `lightgbm_v2`.
 
 **Conclusion**: The pipeline is verified as working end-to-end. The review gate rule successfully traversed from Phase 2 (Agents) -> Phase 3 (DB) -> Phase 4 (Backend API) -> Phase 4 (Frontend UI) without degradation or silent drops.
