@@ -1,7 +1,5 @@
 import React from "react";
-import { AdvancedMarker, useMap } from "@vis.gl/react-google-maps";
-import { AlertTriangle } from "lucide-react";
-import { createRoot } from "react-dom/client";
+import { AdvancedMarker } from "@vis.gl/react-google-maps";
 import type { MockProperty } from "../../data/mockData";
 
 function formatPrice(price: number): string {
@@ -17,23 +15,20 @@ interface PropertyMarkerProps {
 }
 
 export function PropertyMarker({ property, isSelected, zoom, onClick }: PropertyMarkerProps) {
-  const markerRef = React.useRef<google.maps.marker.AdvancedMarkerElement | null>(null);
+  // Always show price labels — this is the core Zillow-style pattern
+  const showLabel = zoom >= 11;
 
-  const showLabel = zoom >= 13;
-
-  const baseClasses = `
-    flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold
-    shadow-md border-2 cursor-pointer transition-all duration-150
-    whitespace-nowrap select-none
-  `;
+  const baseClasses =
+    "flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold " +
+    "shadow-md border-2 cursor-pointer transition-all duration-150 " +
+    "whitespace-nowrap select-none";
 
   const styleClasses = isSelected
     ? "bg-gray-900 text-white border-gray-900 scale-110 shadow-lg z-10"
-    : "bg-white text-gray-900 border-gray-300 hover:scale-105 hover:shadow-lg";
+    : "bg-white text-gray-900 border-gray-300 hover:scale-105 hover:shadow-lg hover:border-gray-400";
 
   return (
     <AdvancedMarker
-      ref={markerRef}
       position={{ lat: property.lat, lng: property.lng }}
       onClick={onClick}
       zIndex={isSelected ? 10 : 1}
@@ -42,7 +37,7 @@ export function PropertyMarker({ property, isSelected, zoom, onClick }: Property
         {showLabel && <span>{formatPrice(property.price_eur)}</span>}
         {showLabel && property.needs_human_review && (
           <span className="flex items-center text-amber-500 ml-0.5">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
               <line x1="12" y1="9" x2="12" y2="13"/>
               <line x1="12" y1="17" x2="12.01" y2="17"/>

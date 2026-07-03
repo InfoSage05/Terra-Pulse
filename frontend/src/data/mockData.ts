@@ -92,3 +92,32 @@ export interface FilterState {
   maxPrice: number | null;
   propertyType: PropertyType | null;
 }
+
+export interface MockArea {
+  id: number;
+  name: string;
+  area_type: string;
+  county: string;
+  avg_price: number;
+  property_count: number;
+}
+
+export const MOCK_AREAS: MockArea[] = [
+  { id: 1, name: "Dublin 1", area_type: "postal_district", county: "Dublin", avg_price: 390000, property_count: 3 },
+  { id: 2, name: "Dublin 2", area_type: "postal_district", county: "Dublin", avg_price: 786000, property_count: 4 },
+  { id: 3, name: "Dublin 3", area_type: "postal_district", county: "Dublin", avg_price: 532000, property_count: 3 },
+  { id: 4, name: "Dublin 4", area_type: "postal_district", county: "Dublin", avg_price: 900000, property_count: 4 },
+  { id: 5, name: "Dublin 5", area_type: "postal_district", county: "Dublin", avg_price: 465000, property_count: 2 },
+  { id: 6, name: "Dublin 6", area_type: "postal_district", county: "Dublin", avg_price: 688000, property_count: 3 },
+  { id: 7, name: "Dublin 7", area_type: "postal_district", county: "Dublin", avg_price: 432000, property_count: 3 },
+  { id: 8, name: "Dublin 8", area_type: "postal_district", county: "Dublin", avg_price: 437000, property_count: 4 },
+  { id: 9, name: "Dublin 9", area_type: "postal_district", county: "Dublin", avg_price: 518000, property_count: 3 },
+  { id: 12, name: "Dublin 12", area_type: "postal_district", county: "Dublin", avg_price: 373000, property_count: 2 },
+  { id: 14, name: "Dublin 14", area_type: "postal_district", county: "Dublin", avg_price: 783000, property_count: 3 },
+  { id: 15, name: "Dublin 15", area_type: "postal_district", county: "Dublin", avg_price: 447000, property_count: 3 },
+  { id: 16, name: "Dublin 16", area_type: "postal_district", county: "Dublin", avg_price: 590000, property_count: 1 },
+  { id: 18, name: "Dublin 18", area_type: "postal_district", county: "Dublin", avg_price: 725000, property_count: 2 },
+  { id: 24, name: "Dublin 24", area_type: "postal_district", county: "Dublin", avg_price: 338000, property_count: 3 },
+  { id: 99, name: "Blackrock", area_type: "suburb", county: "Dún Laoghaire-Rathdown", avg_price: 890000, property_count: 3 },
+  { id: 100, name: "Dún Laoghaire", area_type: "suburb", county: "Dún Laoghaire-Rathdown", avg_price: 678000, property_count: 3 },
+];

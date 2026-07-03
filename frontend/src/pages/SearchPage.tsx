@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { Map, useMap } from "@vis.gl/react-google-maps";
+import { useSearchParams } from "react-router-dom";
+import { SiteHeader } from "../components/layout/SiteHeader";
 import { SplitLayout } from "../components/layout/SplitLayout";
 import { SearchHeader } from "../components/layout/SearchHeader";
 import { FilterBar } from "../components/filters/FilterBar";
@@ -10,7 +12,7 @@ import { AreaMarker } from "../components/map/AreaMarker";
 import { LayerToggle } from "../components/map/LayerToggle";
 import { useSearchState } from "../hooks/useSearchState";
 import { useAreas } from "../hooks/useAreas";
-import { AreaScoreOutput, AreaDetail } from "../types/api";
+import { AreaScoreOutput } from "../types/api";
 import { ScoreType } from "../lib/colourScales";
 import { AREA_SCORES_MOCK, MOCK_PROPERTIES } from "../data/mockData";
 
@@ -62,26 +64,20 @@ function MapContent({
     }
   }, [selectedId, map]);
 
-  const shouldShow = zoom >= 11;
-
   return (
     <>
-      {showChoropleth && (
-        <ScoreLayerWrapper choroplethType={choroplethType} />
-      )}
-
+      {showChoropleth && <ScoreLayerWrapper choroplethType={choroplethType} />}
       {showChoropleth && <ReviewMarkersWrapper />}
 
-      {shouldShow &&
-        MOCK_PROPERTIES.map((p) => (
-          <PropertyMarker
-            key={p.id}
-            property={p}
-            isSelected={selectedId === p.id}
-            zoom={zoom}
-            onClick={() => onSelectProperty(p.id)}
-          />
-        ))}
+      {MOCK_PROPERTIES.map((p) => (
+        <PropertyMarker
+          key={p.id}
+          property={p}
+          isSelected={selectedId === p.id}
+          zoom={zoom}
+          onClick={() => onSelectProperty(p.id)}
+        />
+      ))}
     </>
   );
 }
@@ -150,6 +146,8 @@ function ReviewMarkersWrapper() {
 
 export function SearchPage() {
   const state = useSearchState();
+  const [searchParams] = useSearchParams();
+  const locationQuery = searchParams.get("location") || "";
   const [showChoropleth, setShowChoropleth] = useState(false);
   const [choroplethType, setChoroplethType] = useState<ScoreType>("price");
 
@@ -165,10 +163,10 @@ export function SearchPage() {
       )}
       <button
         onClick={() => setShowChoropleth(!showChoropleth)}
-        className={`absolute top-4 right-4 z-10 px-3 py-1.5 rounded-md text-xs font-medium shadow-md transition-colors ${
+        className={`absolute top-3 right-3 z-10 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-md transition-all ${
           showChoropleth
-            ? "bg-indigo-600 text-white"
-            : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-200"
+            ? "bg-indigo-600 text-white border border-indigo-600"
+            : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-300"
         }`}
       >
         {showChoropleth ? "Scores On" : "Scores"}
@@ -198,7 +196,16 @@ export function SearchPage() {
         propertyCount={state.filteredCount}
         onClearFilters={state.clearFilters}
         hasActiveFilters={hasActiveFilters}
+        onAskAI={() => {
+          const event = new CustomEvent("open-chat-widget");
+          window.dispatchEvent(event);
+        }}
       />
+      {locationQuery && (
+        <div className="px-5 py-2 bg-indigo-50 border-b border-indigo-100 text-sm text-indigo-700">
+          Searching in: <span className="font-semibold">{locationQuery}</span>
+        </div>
+      )}
       <FilterBar
         filters={state.filters}
         sortBy={state.sortBy}
@@ -217,5 +224,10 @@ export function SearchPage() {
     </>
   );
 
-  return <SplitLayout mapPanel={mapPanel} listPanel={listPanel} />;
+  return (
+    <div className="h-screen w-full flex flex-col">
+      <SiteHeader />
+      <SplitLayout mapPanel={mapPanel} listPanel={listPanel} />
+    </div>
+  );
 }
