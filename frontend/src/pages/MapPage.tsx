@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { MapContainer, TileLayer } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
+import { Map } from "@vis.gl/react-google-maps";
 import { useAreas } from "../hooks/useAreas";
 import { getAreaScore } from "../api/areas";
 import { AreaScoreOutput } from "../types/api";
@@ -9,15 +8,12 @@ import { ScoreLayer } from "../components/map/ScoreLayer";
 import { LayerToggle } from "../components/map/LayerToggle";
 import { AreaMarker } from "../components/map/AreaMarker";
 import { AreaDetailPanel } from "../components/area-detail/AreaDetailPanel";
-import { LoadingState } from "../components/shared/LoadingState";
-import { ErrorState } from "../components/shared/ErrorState";
 
-const DUBLIN_CENTER: [number, number] = [53.3498, -6.2603];
+const DUBLIN_CENTER = { lat: 53.3498, lng: -6.2603 };
 
-// Helper to compute a simple centroid from GeoJSON polygon
-function getCentroid(geometry: any) {
+function getCentroid(geometry: any): { lat: number; lng: number } | null {
   if (!geometry || !geometry.coordinates) return null;
-  
+
   try {
     let coords = geometry.coordinates;
     if (geometry.type === "MultiPolygon") {
@@ -25,16 +21,16 @@ function getCentroid(geometry: any) {
     } else if (geometry.type === "Polygon") {
       coords = coords[0];
     }
-    
+
     if (!coords || coords.length === 0 || !Array.isArray(coords[0])) return null;
-    
+
     let sumLat = 0, sumLng = 0;
     coords.forEach(([lng, lat]: [number, number]) => {
       sumLat += lat;
       sumLng += lng;
     });
     return { lat: sumLat / coords.length, lng: sumLng / coords.length };
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -46,12 +42,10 @@ export function MapPage() {
   const [scoresCache, setScoresCache] = useState<Record<number, AreaScoreOutput>>({});
   const scoresCacheRef = useRef(scoresCache);
 
-  // Keep ref in sync with state
   useEffect(() => {
     scoresCacheRef.current = scoresCache;
   }, [scoresCache]);
 
-  // Background fetch of all scores for map flags and layers
   useEffect(() => {
     if (!areas) return;
     const fetchScores = async () => {
@@ -65,8 +59,8 @@ export function MapPage() {
           try {
             const score = await getAreaScore(area.id);
             newScores[area.id] = score;
-          } catch (e) {
-            console.error("Failed to fetch score", e);
+          } catch {
+            // scores unavailable if backend is down
           }
         })
       );
@@ -91,49 +85,46 @@ export function MapPage() {
         </div>
       )}
       <LayerToggle activeLayer={activeScoreType} onChange={setActiveScoreType} />
-      
-      <MapContainer
-        center={DUBLIN_CENTER}
-        zoom={11}
-        style={{ height: "100%", width: "100%", zIndex: 0 }}
+
+      <Map
+        defaultCenter={DUBLIN_CENTER}
+        defaultZoom={11}
+        mapId="terrapulse-map"
+        style={{ height: "100%", width: "100%" }}
+        gestureHandling="greedy"
+        disableDefaultUI={false}
         zoomControl={false}
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        
-        <ScoreLayer 
-          areas={areas || []} 
-          activeScoreType={activeScoreType} 
+        <ScoreLayer
+          areas={areas || []}
+          activeScoreType={activeScoreType}
           scoresCache={scoresCache}
-          onAreaClick={setSelectedAreaId} 
+          onAreaClick={setSelectedAreaId}
         />
-        
+
         {areas?.map((area: any) => {
           const score = scoresCache[area.id];
           if (score?.needs_human_review) {
             const centroid = getCentroid(area.geometry);
             if (centroid) {
               return (
-                <AreaMarker 
+                <AreaMarker
                   key={area.id}
-                  lat={centroid.lat} 
-                  lng={centroid.lng} 
-                  needsReview={true} 
-                  onClick={() => setSelectedAreaId(area.id)} 
+                  position={centroid}
+                  needsReview={true}
+                  onClick={() => setSelectedAreaId(area.id)}
                 />
               );
             }
           }
           return null;
         })}
-      </MapContainer>
-      
+      </Map>
+
       {selectedAreaId && (
-        <AreaDetailPanel 
-          areaId={selectedAreaId} 
-          onClose={() => setSelectedAreaId(null)} 
+        <AreaDetailPanel
+          areaId={selectedAreaId}
+          onClose={() => setSelectedAreaId(null)}
         />
       )}
     </div>

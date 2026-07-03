@@ -1,42 +1,40 @@
-import React from "react";
-import { Marker, Popup } from "react-leaflet";
-import L from "leaflet";
-import { renderToString } from "react-dom/server";
+import React, { useState } from "react";
+import { AdvancedMarker, InfoWindow } from "@vis.gl/react-google-maps";
 import { AlertTriangle } from "lucide-react";
 
 interface AreaMarkerProps {
-  lat: number;
-  lng: number;
+  position: google.maps.LatLngLiteral;
   needsReview: boolean;
   onClick: () => void;
 }
 
-export function AreaMarker({ lat, lng, needsReview, onClick }: AreaMarkerProps) {
-  if (!needsReview) return null;
-  
-  // Create a custom icon using a React component rendered to HTML
-  const iconHtml = renderToString(
-    <div className="bg-amber-500 rounded-full p-1 shadow-lg border-2 border-white transform hover:scale-110 transition-transform cursor-pointer flex items-center justify-center">
-      <AlertTriangle className="w-5 h-5 text-white" />
-    </div>
-  );
+export function AreaMarker({ position, needsReview, onClick }: AreaMarkerProps) {
+  const [infoOpen, setInfoOpen] = useState(false);
 
-  const customIcon = L.divIcon({
-    html: iconHtml,
-    className: "", // Remove default leaflet class to avoid background styling
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-  });
+  if (!needsReview) return null;
 
   return (
-    <Marker
-      position={[lat, lng]}
-      icon={customIcon}
-      eventHandlers={{
-        click: onClick,
+    <AdvancedMarker
+      position={position}
+      onClick={() => {
+        setInfoOpen(true);
+        onClick();
       }}
     >
-      <Popup>This area is flagged for human review</Popup>
-    </Marker>
+      <div className="bg-amber-500 rounded-full p-1.5 shadow-lg border-2 border-white cursor-pointer hover:scale-110 transition-transform flex items-center justify-center">
+        <AlertTriangle className="w-5 h-5 text-white" />
+      </div>
+
+      {infoOpen && (
+        <InfoWindow
+          position={position}
+          onClose={() => setInfoOpen(false)}
+        >
+          <p className="text-sm text-amber-800 whitespace-nowrap">
+            This area is flagged for human review
+          </p>
+        </InfoWindow>
+      )}
+    </AdvancedMarker>
   );
 }

@@ -1,8 +1,7 @@
 import React from "react";
-import { GeoJSON } from "react-leaflet";
+import { Polygon } from "@vis.gl/react-google-maps";
 import { AreaDetail, AreaScoreOutput } from "../../types/api";
 import { ScoreType, getColorForScore } from "../../lib/colourScales";
-import { Layer } from "leaflet";
 
 interface ScoreLayerProps {
   areas: AreaDetail[];
@@ -11,59 +10,55 @@ interface ScoreLayerProps {
   onAreaClick: (areaId: number) => void;
 }
 
+function geoJsonCoordsToPaths(geometry: any): google.maps.LatLngLiteral[][] {
+  if (!geometry || !geometry.coordinates) return [];
+
+  const convertRing = (ring: number[][]): google.maps.LatLngLiteral[] =>
+    ring.map(([lng, lat]) => ({ lat, lng }));
+
+  if (geometry.type === "Polygon") {
+    return geometry.coordinates.map(convertRing);
+  }
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.flatMap((polygon: number[][][]) =>
+      polygon.map(convertRing)
+    );
+  }
+  return [];
+}
+
+function getScoreValue(area: AreaDetail, scoreData: AreaScoreOutput | undefined, scoreType: ScoreType): number | null | undefined {
+  if (scoreType === "price") return area.metrics?.avg_price;
+  if (!scoreData) return null;
+  if (scoreType === "affordability") return scoreData.affordability_score;
+  if (scoreType === "safety") return scoreData.safety_score;
+  if (scoreType === "livability") return scoreData.livability_score;
+  return null;
+}
+
 export function ScoreLayer({ areas, activeScoreType, scoresCache, onAreaClick }: ScoreLayerProps) {
-  
-  const getFeatureStyle = (feature: any) => {
-    const areaId = feature.properties.areaId;
-    const avg_price = feature.properties.avg_price;
-    const scoreData = scoresCache[areaId];
-    
-    let val = null;
-    if (activeScoreType === "price") val = avg_price;
-    else if (activeScoreType === "affordability" && scoreData) val = scoreData.affordability_score;
-    else if (activeScoreType === "safety" && scoreData) val = scoreData.safety_score;
-    else if (activeScoreType === "livability" && scoreData) val = scoreData.livability_score;
-
-    return {
-      fillColor: getColorForScore(activeScoreType, val),
-      weight: 1,
-      opacity: 1,
-      color: 'white',
-      fillOpacity: 0.6
-    };
-  };
-
-  const onEachFeature = (feature: any, layer: Layer) => {
-    const areaId = feature.properties.areaId;
-    layer.on({
-      click: () => {
-        if (areaId) onAreaClick(areaId);
-      }
-    });
-  };
-
   return (
     <>
       {areas.map(area => {
         if (!area.geometry) return null;
-        
-        const geoJsonFeature = {
-          type: "Feature" as const,
-          geometry: area.geometry,
-          properties: {
-            areaId: area.id,
-            name: area.name,
-            avg_price: area.metrics?.avg_price
-          }
-        };
+        const paths = geoJsonCoordsToPaths(area.geometry);
+        if (paths.length === 0) return null;
 
-        // We use a unique key combining area id and active score type so React completely re-renders the GeoJSON component when styles change
+        const scoreData = scoresCache[area.id];
+        const val = getScoreValue(area, scoreData, activeScoreType);
+        const fillColor = getColorForScore(activeScoreType, val);
+
         return (
-          <GeoJSON 
-            key={`${area.id}-${activeScoreType}`} 
-            data={geoJsonFeature} 
-            style={getFeatureStyle}
-            onEachFeature={onEachFeature}
+          <Polygon
+            key={`${area.id}-${activeScoreType}`}
+            paths={paths}
+            options={{
+              fillColor,
+              fillOpacity: 0.55,
+              strokeColor: "#ffffff",
+              strokeWeight: 1,
+            }}
+            onClick={() => onAreaClick(area.id)}
           />
         );
       })}
