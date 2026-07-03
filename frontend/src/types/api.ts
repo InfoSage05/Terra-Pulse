@@ -34,6 +34,7 @@ export interface AreaScoreOutput {
   livability_score: number | null;
   livability_confidence: number | null;
   needs_human_review: boolean;
+  agent_summary: string | null;
   model_versions_used: Record<string, string>;
   last_updated: string;
 }

@@ -5,6 +5,8 @@ export function useAreas() {
   return useQuery({
     queryKey: ["areas"],
     queryFn: getAreas,
+    retry: false,
+    staleTime: 60_000,
   });
 }
 

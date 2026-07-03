@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { MapContainer, TileLayer } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { useAreas } from "../hooks/useAreas";
@@ -44,15 +44,22 @@ export function MapPage() {
   const [activeScoreType, setActiveScoreType] = useState<ScoreType>("price");
   const [selectedAreaId, setSelectedAreaId] = useState<number | null>(null);
   const [scoresCache, setScoresCache] = useState<Record<number, AreaScoreOutput>>({});
+  const scoresCacheRef = useRef(scoresCache);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    scoresCacheRef.current = scoresCache;
+  }, [scoresCache]);
 
   // Background fetch of all scores for map flags and layers
   useEffect(() => {
     if (!areas) return;
     const fetchScores = async () => {
-      const toFetch = areas.filter(a => !scoresCache[a.id]).slice(0, 50); // limit to avoid spam
+      const cache = scoresCacheRef.current;
+      const toFetch = areas.filter(a => !cache[a.id]).slice(0, 50);
       if (toFetch.length === 0) return;
-      
-      const newScores = { ...scoresCache };
+
+      const newScores = { ...cache };
       await Promise.all(
         toFetch.map(async (area: any) => {
           try {
@@ -63,17 +70,26 @@ export function MapPage() {
           }
         })
       );
-      setScoresCache(newScores as Record<number, AreaScoreOutput>);
+      setScoresCache(newScores);
     };
-    
-    fetchScores();
-  }, [areas, scoresCache]);
 
-  if (isLoading) return <div className="h-screen flex items-center justify-center"><LoadingState message="Loading map data..." /></div>;
-  if (error) return <div className="h-screen flex items-center justify-center"><ErrorState message="Failed to load map data" onRetry={refetch} /></div>;
+    fetchScores();
+  }, [areas]);
 
   return (
     <div className="h-screen w-full relative">
+      {isLoading && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 bg-white/90 backdrop-blur rounded-full px-4 py-1.5 shadow-md text-sm text-gray-500 flex items-center gap-2">
+          <div className="animate-spin rounded-full h-3 w-3 border border-indigo-600 border-t-transparent" />
+          Loading area data...
+        </div>
+      )}
+      {error && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 shadow-md text-sm text-amber-800 flex items-center gap-2">
+          Backend unavailable — showing map only
+          <button onClick={() => refetch()} className="underline text-amber-900 ml-1">Retry</button>
+        </div>
+      )}
       <LayerToggle activeLayer={activeScoreType} onChange={setActiveScoreType} />
       
       <MapContainer

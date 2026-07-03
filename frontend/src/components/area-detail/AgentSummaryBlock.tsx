@@ -2,8 +2,8 @@ import React from "react";
 import { AreaScoreOutput } from "../../types/api";
 
 export function AgentSummaryBlock({ scores }: { scores: AreaScoreOutput }) {
-  if (scores.livability_confidence === null) {
-    return null; // no unstructured pipeline run yet
+  if (scores.livability_confidence === null && !scores.agent_summary) {
+    return null;
   }
 
   return (
@@ -13,11 +13,16 @@ export function AgentSummaryBlock({ scores }: { scores: AreaScoreOutput }) {
       </h3>
       
       <div className="text-sm text-gray-700 leading-relaxed italic mb-4">
-        "Based on unstructured community discussions, historical news sentiment, and local forums, the qualitative livability of this area is assessed at {(scores.livability_score || 0).toFixed(1)}/100."
+        {scores.agent_summary 
+          ? `"${scores.agent_summary}"`
+          : `"Based on unstructured community discussions, historical news sentiment, and local forums, the qualitative livability of this area is assessed at ${(scores.livability_score || 0).toFixed(1)}/100."`
+        }
       </div>
       
       <div className="flex justify-between items-center text-xs text-gray-500 bg-gray-50 p-2 rounded">
-        <span>Confidence: {(scores.livability_confidence * 100).toFixed(0)}%</span>
+        {scores.livability_confidence !== null && (
+          <span>Confidence: {(scores.livability_confidence * 100).toFixed(0)}%</span>
+        )}
         <span>Updated: {new Date(scores.last_updated).toLocaleDateString()}</span>
       </div>
     </div>
