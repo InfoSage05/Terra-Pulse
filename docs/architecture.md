@@ -7,6 +7,7 @@ This document outlines the architectural decisions and pipeline flow for the Ter
 - **Schema-First Validation**: All data fetched from external sources must pass strictly typed Pydantic validation schemas.
 - **Dead Letter Queue (DLQ)**: Any record failing validation or database insertion is serialized as JSON and stored in `data/dead_letter/`. The pipeline never crashes due to a bad record.
 - **Idempotency**: Connectors run synchronously, performing upserts based on natural composite keys.
+- **Property Price Register (PPR) Fallback & Scheduling**: The official Domino site resists automated CSV generation via plain HTTP requests. As a fallback, `PPRConnector` consumes CSVs manually downloaded to `data/raw/ppr/manual_pulls/`. A background `APScheduler` job (`scheduled_refresh.py`) periodically runs all connectors, exports a maintained master dataset (`data/exports/ppr_dublin_master.csv`), logs runs to the `ingestion_runs` table, and automatically invalidates Redis scores to ensure fresh data propagation.
 
 ## 2. Agents Layer (Unstructured Data)
 - **Sequential Pipeline**: Processes unstructured text via a 3-step pipeline (Extract -> Score -> Fuse). 
