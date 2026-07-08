@@ -16,8 +16,8 @@ class LLMClient:
     Handles the API call, retries on transient errors, and enforces JSON-only output.
     """
     
-    def __init__(self, model_name: str = "meta-llama/llama-3-8b-instruct:free"):
-        self.model_name = model_name
+    def __init__(self, model_name: str = None):
+        self.model_name = model_name or os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3-8b-instruct:free")
         
         # Check for API key
         api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("GROQ_API_KEY")
