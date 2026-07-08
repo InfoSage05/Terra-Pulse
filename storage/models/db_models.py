@@ -95,3 +95,14 @@ class AreaAgentSummary(Base):
     source_name = Column(String, nullable=False, server_default='agent_pipeline')
     ingested_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
+class IngestionRun(Base):
+    __tablename__ = 'ingestion_runs'
+    id = Column(Integer, primary_key=True, index=True)
+    source_name = Column(String(255), nullable=False, index=True)
+    started_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    finished_at = Column(DateTime(timezone=True))
+    rows_fetched = Column(Integer, server_default='0')
+    rows_upserted = Column(Integer, server_default='0')
+    rows_dead_lettered = Column(Integer, server_default='0')
+    status = Column(String(50), nullable=False)
