@@ -10,15 +10,35 @@ __pycache__/
 venv/
 env/
 .venv/
+.pytest_cache/
 
 # Node
 node_modules/
 dist/
 
+# TypeScript
+*.tsbuildinfo
+
 # IDEs
 .idea/
 .vscode/
 
-# Project Specific
+# Playwright
+.playwright/
+
+# Data (generated at runtime, not source code)
+data/pgdata/
+data/exports/
+data/raw/
+data/processed/
 data/dead_letter/
-data/models/
+!data/raw/ppr/manual_pulls/.gitkeep
+!data/processed/.gitkeep
+!data/dead_letter/.gitkeep
+
+# Local environment
+.envrc
+
+# OS
+.DS_Store
+Thumbs.db
