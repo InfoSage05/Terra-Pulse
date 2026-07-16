@@ -27,5 +27,7 @@ ENV PYTHONPATH=/app
 # Expose FastAPI port
 EXPOSE 8000
 
-# Run FastAPI via Uvicorn
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Apply any pending DB migrations, then run FastAPI via Uvicorn.
+# run_migrations.py is idempotent (tracks applied files in schema_migrations),
+# so it is safe to run on every container start.
+CMD ["sh", "-c", "python storage/scripts/run_migrations.py && uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"]
