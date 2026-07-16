@@ -7,5 +7,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/v1"
     API_KEY: str = "dev_secret_key"
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/postgres"
+    REDIS_URL: str = "redis://localhost:6379/0"
+    AREA_SCORE_CACHE_TTL_SECONDS: int = 3600
 
 settings = Settings()

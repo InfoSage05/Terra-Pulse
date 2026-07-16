@@ -1,12 +1,13 @@
 import React from "react";
 import { Polygon } from "@vis.gl/react-google-maps";
-import { AreaDetail, AreaScoreOutput } from "../../types/api";
+import { AreaDetail, AreaMetrics, AreaScoreOutput } from "../../types/api";
 import { ScoreType, getColorForScore } from "../../lib/colourScales";
 
 interface ScoreLayerProps {
   areas: AreaDetail[];
   activeScoreType: ScoreType;
   scoresCache: Record<number, AreaScoreOutput>;
+  metricsCache?: Record<number, AreaMetrics>;
   onAreaClick: (areaId: number) => void;
 }
 
@@ -27,8 +28,16 @@ function geoJsonCoordsToPaths(geometry: any): google.maps.LatLngLiteral[][] {
   return [];
 }
 
-function getScoreValue(area: AreaDetail, scoreData: AreaScoreOutput | undefined, scoreType: ScoreType): number | null | undefined {
-  if (scoreType === "price") return area.metrics?.avg_price;
+function getScoreValue(
+  area: AreaDetail,
+  scoreData: AreaScoreOutput | undefined,
+  metricsData: AreaMetrics | undefined,
+  scoreType: ScoreType
+): number | null | undefined {
+  // GET /v1/areas/ (list) never includes `metrics`, so area.metrics is always
+  // undefined here — fall back to the per-area metrics fetched separately
+  // (MapPage's metricsCache, sourced from GET /v1/areas/{id}).
+  if (scoreType === "price") return area.metrics?.avg_price ?? metricsData?.avg_price;
   if (!scoreData) return null;
   if (scoreType === "affordability") return scoreData.affordability_score;
   if (scoreType === "safety") return scoreData.safety_score;
@@ -36,7 +45,7 @@ function getScoreValue(area: AreaDetail, scoreData: AreaScoreOutput | undefined,
   return null;
 }
 
-export function ScoreLayer({ areas, activeScoreType, scoresCache, onAreaClick }: ScoreLayerProps) {
+export function ScoreLayer({ areas, activeScoreType, scoresCache, metricsCache, onAreaClick }: ScoreLayerProps) {
   return (
     <>
       {areas.map(area => {
@@ -45,7 +54,8 @@ export function ScoreLayer({ areas, activeScoreType, scoresCache, onAreaClick }:
         if (paths.length === 0) return null;
 
         const scoreData = scoresCache[area.id];
-        const val = getScoreValue(area, scoreData, activeScoreType);
+        const metricsData = metricsCache?.[area.id];
+        const val = getScoreValue(area, scoreData, metricsData, activeScoreType);
         const fillColor = getColorForScore(activeScoreType, val);
 
         return (

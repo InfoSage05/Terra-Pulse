@@ -19,18 +19,27 @@ def _save_index(index: Dict[str, dict]):
     with open(REGISTRY_INDEX, "w") as f:
         json.dump(index, f, indent=2)
 
+def _registry_key(model_type, version: str) -> str:
+    # Versions are second-precision timestamps generated independently by
+    # each training script, so two different model_types can generate the
+    # same version string if they finish training within the same second.
+    # Keying purely by version would let one silently overwrite the other's
+    # registry entry, so the key must include model_type too.
+    type_str = model_type.value if hasattr(model_type, "value") else model_type
+    return f"{type_str}:{version}"
+
 def save_model(metadata: ModelMetadata, model_artifact: any = None) -> None:
     index = _load_index()
-    
+
     if metadata.is_active:
         # Deactivate previous active model of this type
-        for version, meta_dict in index.items():
+        for key, meta_dict in index.items():
             if meta_dict["model_type"] == metadata.model_type and meta_dict.get("is_active"):
                 meta_dict["is_active"] = False
-                
-    index[metadata.version] = metadata.model_dump(mode="json")
+
+    index[_registry_key(metadata.model_type, metadata.version)] = metadata.model_dump(mode="json")
     _save_index(index)
-    
+
     if model_artifact is not None:
         model_path = os.path.join(REGISTRY_DIR, f"{metadata.model_type}_{metadata.version}.pkl")
         with open(model_path, "wb") as f:
@@ -38,7 +47,7 @@ def save_model(metadata: ModelMetadata, model_artifact: any = None) -> None:
 
 def get_active_model_metadata(model_type: ModelType) -> Optional[ModelMetadata]:
     index = _load_index()
-    for version, meta_dict in index.items():
+    for key, meta_dict in index.items():
         if meta_dict["model_type"] == model_type and meta_dict.get("is_active"):
             return ModelMetadata(**meta_dict)
     return None

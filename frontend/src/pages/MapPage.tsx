@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Map } from "@vis.gl/react-google-maps";
 import { useAreas } from "../hooks/useAreas";
-import { getAreaScore } from "../api/areas";
-import { AreaScoreOutput } from "../types/api";
+import { getAreaScore, getAreaDetail } from "../api/areas";
+import { AreaScoreOutput, AreaMetrics } from "../types/api";
 import { ScoreType } from "../lib/colourScales";
 import { ScoreLayer } from "../components/map/ScoreLayer";
 import { LayerToggle } from "../components/map/LayerToggle";
@@ -41,10 +41,19 @@ export function MapPage() {
   const [selectedAreaId, setSelectedAreaId] = useState<number | null>(null);
   const [scoresCache, setScoresCache] = useState<Record<number, AreaScoreOutput>>({});
   const scoresCacheRef = useRef(scoresCache);
+  // GET /v1/areas/ (list) never includes `metrics` (only GET /v1/areas/{id} does),
+  // so the "price" choropleth layer needs its own per-area fetch, mirroring the
+  // scores fetch below, otherwise every polygon renders as "no data" gray.
+  const [metricsCache, setMetricsCache] = useState<Record<number, AreaMetrics>>({});
+  const metricsCacheRef = useRef(metricsCache);
 
   useEffect(() => {
     scoresCacheRef.current = scoresCache;
   }, [scoresCache]);
+
+  useEffect(() => {
+    metricsCacheRef.current = metricsCache;
+  }, [metricsCache]);
 
   useEffect(() => {
     if (!areas) return;
@@ -67,7 +76,27 @@ export function MapPage() {
       setScoresCache(newScores);
     };
 
+    const fetchMetrics = async () => {
+      const cache = metricsCacheRef.current;
+      const toFetch = areas.filter(a => !cache[a.id]).slice(0, 50);
+      if (toFetch.length === 0) return;
+
+      const newMetrics = { ...cache };
+      await Promise.all(
+        toFetch.map(async (area: any) => {
+          try {
+            const detail = await getAreaDetail(area.id);
+            if (detail.metrics) newMetrics[area.id] = detail.metrics;
+          } catch {
+            // metrics unavailable if backend is down
+          }
+        })
+      );
+      setMetricsCache(newMetrics);
+    };
+
     fetchScores();
+    fetchMetrics();
   }, [areas]);
 
   return (
@@ -98,6 +127,7 @@ export function MapPage() {
           areas={areas || []}
           activeScoreType={activeScoreType}
           scoresCache={scoresCache}
+          metricsCache={metricsCache}
           onAreaClick={setSelectedAreaId}
         />
 

@@ -41,6 +41,23 @@ services:
       redis:
         condition: service_healthy
 
+  scheduler:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["sh", "-c", "python storage/scripts/run_migrations.py && python -m ingestion.jobs.scheduled_refresh"]
+    env_file:
+      - .env
+    environment:
+      RUN_ON_STARTUP: "1"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   frontend:
     build:
       context: ./frontend

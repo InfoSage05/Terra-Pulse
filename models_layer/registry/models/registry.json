@@ -1,0 +1,43 @@
+{
+  "price_prediction:2026-07-16_201317": {
+    "model_type": "price_prediction",
+    "version": "2026-07-16_201317",
+    "trained_at": "2026-07-16T20:13:17.573754",
+    "training_row_count": 25,
+    "feature_names": [
+      "amenity_count",
+      "total_crime",
+      "population",
+      "deprivation_index"
+    ],
+    "metric_name": "MAE",
+    "metric_value": 118654.36013313224,
+    "is_active": true
+  },
+  "affordability_score:2026-07-16_201317": {
+    "model_type": "affordability_score",
+    "version": "2026-07-16_201317",
+    "trained_at": "2026-07-16T20:13:17.650022",
+    "training_row_count": 2,
+    "feature_names": [
+      "avg_price",
+      "deprivation_index"
+    ],
+    "metric_name": "Coverage",
+    "metric_value": 0.08,
+    "is_active": true
+  },
+  "safety_score:2026-07-16_201317": {
+    "model_type": "safety_score",
+    "version": "2026-07-16_201317",
+    "trained_at": "2026-07-16T20:13:17.733619",
+    "training_row_count": 2,
+    "feature_names": [
+      "total_crime",
+      "population"
+    ],
+    "metric_name": "Coverage",
+    "metric_value": 0.08,
+    "is_active": true
+  }
+}

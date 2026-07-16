@@ -1,6 +1,6 @@
 import pandas as pd
 from sqlalchemy import text
-from storage.scripts.db_connect import engine
+from storage.scripts.db_connect import get_engine
 
 def get_area_features() -> pd.DataFrame:
     """
@@ -54,6 +54,6 @@ def get_area_features() -> pd.DataFrame:
     LEFT JOIN demo_latest d ON a.id = d.area_id
     LEFT JOIN agent_summary agt ON a.id = agt.area_id
     """
-    with engine.connect() as conn:
+    with get_engine().connect() as conn:
         df = pd.read_sql(text(query), conn)
     return df

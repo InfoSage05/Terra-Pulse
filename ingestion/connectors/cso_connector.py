@@ -1,24 +1,86 @@
 from datetime import datetime
+import requests
 from pydantic import ValidationError
 from sqlalchemy.dialects.postgresql import insert
 from ingestion.connectors.base import BaseConnector
 from ingestion.schemas.area_demographics import AreaDemographicsSchema
 from storage.models.db_models import AreaDemographics, Area
 from ingestion.utils.geocoding import resolve_area_id_by_name
+from ingestion.utils.jsonstat import iter_jsonstat_cells, label_for
+
+# CSO PxStat table F3001: "Population" by Census Year / County and City /
+# Detailed Marital Status / Sex. Verified live against the PxStat API
+# (https://ws.cso.ie/public/api.restful/PxStat.Data.Cube_API.ReadDataset/F3001/JSON-stat/2.0/en)
+# on 2026-07-17: this is real Census 2011/2016/2022 population data by
+# county/city (Dublin City, Fingal, South Dublin, Dun Laoghaire-Rathdown,
+# etc). Note this is coarser than the Dublin postal-district `areas` seed
+# data, so area_id resolution below may frequently come back null - that's
+# expected given current seed granularity, not a bug in this connector.
+#
+# HPM04 (mentioned in some docs) is actually the Residential Property Price
+# Index by Eircode routing key - NOT a demographics/population table - so it
+# is not used here.
+CSO_TABLE_ID = "F3001"
+CSO_DATASET_URL = (
+    f"https://ws.cso.ie/public/api.restful/PxStat.Data.Cube_API.ReadDataset/"
+    f"{CSO_TABLE_ID}/JSON-stat/2.0/en"
+)
 
 class CSOConnector(BaseConnector):
     """
     CSO Demographics Connector.
-    Fetches data from CSO API (PxStat).
+    Fetches real Census population data from the CSO PxStat API (table F3001).
     """
-    
+
     def get_source_name(self) -> str:
         return "cso"
 
     def fetch(self) -> list[dict]:
-        self.logger.info("Fetching CSO demographics data")
-        # In reality, this would query PxStat API for Census data
-        return self._get_sample_data()
+        self.logger.info(f"Fetching CSO demographics data from PxStat table {CSO_TABLE_ID}")
+        try:
+            resp = requests.get(CSO_DATASET_URL, timeout=30)
+            resp.raise_for_status()
+            dataset = resp.json()
+            raw_data = self._parse_population_dataset(dataset)
+            if not raw_data:
+                raise ValueError("Parsed 0 records from CSO response")
+            self.logger.info(f"Fetched {len(raw_data)} population records from CSO.")
+            return raw_data
+        except Exception as e:
+            self.logger.error(f"CSO PxStat API request failed: {e}")
+            self.logger.info("Falling back to sample data.")
+            return self._get_sample_data()
+
+    def _parse_population_dataset(self, dataset: dict) -> list[dict]:
+        """
+        Parse the F3001 JSON-stat 2.0 cube into flat records, keeping only
+        the "Both sexes" / "All marital status" totals per county/city per
+        census year (matching the coarser-grained totals the rest of the
+        pipeline expects - one population figure per area per year).
+        """
+        raw_data = []
+        for dim_codes, value in iter_jsonstat_cells(dataset):
+            if dim_codes.get("C02325V02801") != "-":  # All marital status only
+                continue
+            if dim_codes.get("C02199V02655") != "-":  # Both sexes only
+                continue
+
+            geo_code = dim_codes["C04104V04868"]
+            if geo_code == "IE0":
+                continue  # skip the national "State" total row
+
+            area_name = label_for(dataset, "C04104V04868", geo_code)
+            year = int(dim_codes["TLIST(A1)"])
+
+            raw_data.append({
+                "area_name": area_name,
+                "year": year,
+                "population": int(value),
+                # Not present in F3001 - left null rather than fabricated.
+                "population_density": None,
+                "deprivation_index": None,
+            })
+        return raw_data
 
     def validate(self, raw_record: dict) -> AreaDemographicsSchema | None:
         try:

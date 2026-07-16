@@ -9,6 +9,7 @@ class PropertySaleSchema(BaseModel):
     price_eur: float = Field(gt=0)
     address_raw: str
     address_normalized: Optional[str] = None
+    area_id: Optional[int] = None
     lat: Optional[float] = None
     lon: Optional[float] = None
     source_name: str

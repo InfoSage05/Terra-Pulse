@@ -21,8 +21,7 @@ def run_pipeline_for_area(
     logger.info(f"Starting agent pipeline for area_id {area_id} with {len(raw_texts)} sources.")
     
     run_id = str(uuid.uuid4())
-    model_name = llm_client.model_name
-    
+
     # Step 1: Extract
     extractions = []
     for text in raw_texts:
@@ -41,10 +40,13 @@ def run_pipeline_for_area(
         return None
         
     # Step 3: Fuse
+    # Read model_name AFTER the LLM calls above, since LLMClient may have
+    # fallen back to a different model than the one it was configured with
+    # (self.model_name is updated in place on a successful fallback call).
     fused_summary = run_fuse(
         score=score_result,
         run_id=run_id,
-        model_name=model_name,
+        model_name=llm_client.model_name,
         structured_data=structured_data,
         source_count=len(raw_texts)
     )

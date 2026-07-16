@@ -13,6 +13,11 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Playwright (used by ingestion/connectors/ppr_connector.py to drive the
+# PSRA download form past its bot-defense JS challenge) needs its own
+# browser binary plus OS-level shared libs, neither of which pip installs.
+RUN playwright install --with-deps chromium
+
 # Copy source code (preserving module structure)
 COPY backend/ ./backend/
 COPY shared/ ./shared/

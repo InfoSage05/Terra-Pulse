@@ -1,3 +1,4 @@
+import logging
 import pandas as pd
 from datetime import datetime
 from typing import Optional
@@ -5,13 +6,34 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from shared.model_contract import AreaScoreOutput, ModelType
 from models_layer.registry.registry import get_active_model_metadata
+from backend.app.core.cache import area_score_key, cache_get, cache_set
+from backend.app.core.config import settings
+
+logger = logging.getLogger("terrapulse.backend.score_service")
+
 
 def get_area_score(db: Session, area_id: int) -> Optional[AreaScoreOutput]:
+    cache_key = area_score_key(area_id)
+    cached = cache_get(cache_key)
+    if cached is not None:
+        try:
+            return AreaScoreOutput.model_validate_json(cached)
+        except Exception as e:
+            # Corrupt/incompatible cache entry - ignore it and recompute live.
+            logger.warning(f"Failed to deserialize cached area score for area_id={area_id}: {e}")
+
+    score = _compute_area_score(db, area_id)
+    if score is not None:
+        cache_set(cache_key, score.model_dump_json(), ttl_seconds=settings.AREA_SCORE_CACHE_TTL_SECONDS)
+    return score
+
+
+def _compute_area_score(db: Session, area_id: int) -> Optional[AreaScoreOutput]:
     # Check if area exists
     area = db.execute(text("SELECT id FROM areas WHERE id = :area_id"), {"area_id": area_id}).scalar()
     if not area:
         return None
-        
+
     # Get active model versions
     affordability_meta = get_active_model_metadata(ModelType.AFFORDABILITY_SCORE)
     safety_meta = get_active_model_metadata(ModelType.SAFETY_SCORE)
