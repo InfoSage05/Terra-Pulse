@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, ZoomControl, useMap, useMapEvents } from "react-leaflet";
 import { useSearchParams } from "react-router-dom";
 import { SiteHeader } from "../components/layout/SiteHeader";
 import { SplitLayout } from "../components/layout/SplitLayout";
@@ -118,8 +118,10 @@ export function SearchPage() {
         center={DUBLIN_CENTER}
         zoom={11}
         scrollWheelZoom
+        zoomControl={false}
         style={{ height: "100%", width: "100%", background: "#020617" }}
       >
+        <ZoomControl position="bottomright" />
         <TileLayer
           url={DARK_TILE_URL}
           attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; OpenStreetMap contributors'

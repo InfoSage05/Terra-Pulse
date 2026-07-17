@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { MapContainer, TileLayer } from "react-leaflet";
+import { MapContainer, TileLayer, ZoomControl } from "react-leaflet";
 import { useAreas } from "../hooks/useAreas";
 import { getAreaScore, getAreaDetail } from "../api/areas";
 import { AreaScoreOutput, AreaMetrics } from "../types/api";
@@ -131,8 +131,10 @@ export function MapPage() {
           center={DUBLIN_CENTER}
           zoom={11}
           scrollWheelZoom
+          zoomControl={false}
           style={{ height: "100%", width: "100%", background: "#020617" }}
         >
+          <ZoomControl position="bottomright" />
           <TileLayer
             url={DARK_TILE_URL}
             attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; OpenStreetMap contributors'

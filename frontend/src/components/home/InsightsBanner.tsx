@@ -50,7 +50,7 @@ export function InsightsBanner() {
               </p>
               <svg viewBox="0 0 320 140" className="w-full h-auto" role="img" aria-label="Bar chart of the three highest average-price areas">
                 {stats.top3.map((area, i) => {
-                  const barHeight = Math.max(8, (area.avg_price / stats.max) * 100);
+                  const barHeight = Math.max(8, (area.avg_price / stats.max) * 80);
                   const x = i * 110 + 20;
                   return (
                     <g key={area.id}>

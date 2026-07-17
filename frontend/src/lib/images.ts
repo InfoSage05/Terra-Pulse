@@ -23,7 +23,7 @@ const AREA_PHOTO_IDS = [
   "photo-1590089415225-401ed6f9db8e",
   "photo-1601925260368-ae2f83cf8b7f",
   "photo-1544620347-c4fd4a3d5957",
-  "photo-1546268060-2592ff93ee24",
+  "photo-1568605114967-8130f3a36994",
   "photo-1489515217757-5fd1be406fef",
 ];
 
