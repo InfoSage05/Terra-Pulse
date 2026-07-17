@@ -15,7 +15,7 @@ import { FilterState, SortOption } from "../hooks/useSearchState";
 import { ScoreType } from "../lib/colourScales";
 
 const DUBLIN_CENTER: [number, number] = [53.3498, -6.2603];
-const DARK_TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const LIGHT_TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
 
 function MapContent({
   properties,
@@ -123,7 +123,7 @@ export function SearchPage() {
       >
         <ZoomControl position="bottomright" />
         <TileLayer
-          url={DARK_TILE_URL}
+          url={LIGHT_TILE_URL}
           attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; OpenStreetMap contributors'
         />
         <MapContent
