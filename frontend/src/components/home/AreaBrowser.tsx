@@ -64,7 +64,7 @@ export function AreaBrowser() {
                     goToArea(area.name);
                   }
                 }}
-                className="group relative bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden cursor-pointer transition-colors hover:border-violet-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
+                className="group relative bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden cursor-pointer transition-colors hover:border-violet-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 flex flex-col"
               >
                 <div className="relative h-[120px] overflow-hidden">
                   <img
@@ -84,7 +84,7 @@ export function AreaBrowser() {
                   )}
                 </div>
 
-                <div className="p-4 pb-16">
+                <div className="p-4 flex-1">
                   <h3 className="font-display font-bold text-slate-50">{area.name}</h3>
                   <p className="font-mono text-lg text-slate-100 mt-1">
                     €{area.avg_price.toLocaleString("en-IE")}

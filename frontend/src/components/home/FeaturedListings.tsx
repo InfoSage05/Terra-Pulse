@@ -37,15 +37,14 @@ export function FeaturedListings() {
         Handpicked for you
       </h2>
 
-      <div className="flex gap-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {properties.map((property, i) => (
-          <div key={property.id} className="snap-start flex-shrink-0 w-72">
-            <PropertyCard
-              property={property}
-              isNew={i < 2}
-              needsReview={scores[property.area_id]?.needs_human_review}
-            />
-          </div>
+          <PropertyCard
+            key={property.id}
+            property={property}
+            isNew={i < 2}
+            needsReview={scores[property.area_id]?.needs_human_review}
+          />
         ))}
       </div>
     </section>
