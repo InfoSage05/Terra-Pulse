@@ -9,7 +9,7 @@ interface PriceRangeFilterProps {
 export function PriceRangeFilter({ minPrice, maxPrice, onChange }: PriceRangeFilterProps) {
   const [minStr, setMinStr] = useState(minPrice ? String(minPrice) : "");
   const [maxStr, setMaxStr] = useState(maxPrice ? String(maxPrice) : "");
-  const debounce = useRef<ReturnType<typeof setTimeout>>();
+  const debounce = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     setMinStr(minPrice ? String(minPrice) : "");
