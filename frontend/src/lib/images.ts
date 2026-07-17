@@ -18,13 +18,14 @@ const HOUSE_PHOTO_IDS = [
   "photo-1502005229762-cf1b2da7c5d6",
 ];
 
+// Only IDs individually visually confirmed as real Dublin/Ireland streetscapes
+// belong here - four previously listed IDs turned out to be unrelated stock
+// (a bus in snow, a bus on a US street, rolled yoga mats, an alpine chalet)
+// despite plausible-sounding filenames, so verify with a real screenshot
+// before adding more rather than trusting the ID alone.
 const AREA_PHOTO_IDS = [
-  "photo-1549918864-48ac978761a4", // Dublin aerial (also used for the hero)
-  "photo-1590089415225-401ed6f9db8e",
-  "photo-1601925260368-ae2f83cf8b7f",
-  "photo-1544620347-c4fd4a3d5957",
-  "photo-1568605114967-8130f3a36994",
-  "photo-1489515217757-5fd1be406fef",
+  "photo-1549918864-48ac978761a4", // Dublin street w/ St. Ann's Church (also used for the hero)
+  "photo-1489515217757-5fd1be406fef", // Cobh, Co. Cork - colourful terraced houses + cathedral
 ];
 
 export const HERO_IMAGE_URL =
