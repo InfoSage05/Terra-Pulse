@@ -39,5 +39,115 @@
     "metric_name": "Coverage",
     "metric_value": 0.08,
     "is_active": true
+  },
+  "price_prediction:2026-07-16_212357": {
+    "model_type": "price_prediction",
+    "version": "2026-07-16_212357",
+    "trained_at": "2026-07-16T21:23:57.623025",
+    "training_row_count": 25,
+    "feature_names": [
+      "amenity_count",
+      "total_crime",
+      "population",
+      "deprivation_index"
+    ],
+    "metric_name": "MAE",
+    "metric_value": 118654.36013313224,
+    "is_active": false
+  },
+  "affordability_score:2026-07-16_212357": {
+    "model_type": "affordability_score",
+    "version": "2026-07-16_212357",
+    "trained_at": "2026-07-16T21:23:57.745283",
+    "training_row_count": 2,
+    "feature_names": [
+      "avg_price",
+      "deprivation_index"
+    ],
+    "metric_name": "Coverage",
+    "metric_value": 0.08,
+    "is_active": false
+  },
+  "safety_score:2026-07-16_212357": {
+    "model_type": "safety_score",
+    "version": "2026-07-16_212357",
+    "trained_at": "2026-07-16T21:23:57.822940",
+    "training_row_count": 2,
+    "feature_names": [
+      "total_crime",
+      "population"
+    ],
+    "metric_name": "Coverage",
+    "metric_value": 0.08,
+    "is_active": false
+  },
+  "livability_score:2026-07-16_212357": {
+    "model_type": "livability_score",
+    "version": "2026-07-16_212357",
+    "trained_at": "2026-07-16T21:23:57.894884",
+    "training_row_count": 8,
+    "feature_names": [
+      "livability_signal",
+      "avg_price",
+      "total_crime"
+    ],
+    "metric_name": "Coverage",
+    "metric_value": 0.32,
+    "is_active": false
+  },
+  "price_prediction:2026-07-16_214231": {
+    "model_type": "price_prediction",
+    "version": "2026-07-16_214231",
+    "trained_at": "2026-07-16T21:42:31.283349",
+    "training_row_count": 25,
+    "feature_names": [
+      "amenity_count",
+      "total_crime",
+      "population",
+      "deprivation_index"
+    ],
+    "metric_name": "MAE",
+    "metric_value": 118654.36013313224,
+    "is_active": false
+  },
+  "affordability_score:2026-07-16_214231": {
+    "model_type": "affordability_score",
+    "version": "2026-07-16_214231",
+    "trained_at": "2026-07-16T21:42:31.421912",
+    "training_row_count": 2,
+    "feature_names": [
+      "avg_price",
+      "deprivation_index"
+    ],
+    "metric_name": "Coverage",
+    "metric_value": 0.08,
+    "is_active": false
+  },
+  "safety_score:2026-07-16_214231": {
+    "model_type": "safety_score",
+    "version": "2026-07-16_214231",
+    "trained_at": "2026-07-16T21:42:31.496725",
+    "training_row_count": 2,
+    "feature_names": [
+      "total_crime",
+      "population"
+    ],
+    "metric_name": "Coverage",
+    "metric_value": 0.08,
+    "is_active": false
+  },
+  "livability_score:2026-07-16_214231": {
+    "model_type": "livability_score",
+    "version": "2026-07-16_214231",
+    "trained_at": "2026-07-16T21:42:31.564066",
+    "training_row_count": 25,
+    "feature_names": [
+      "livability_signal",
+      "avg_price",
+      "total_crime"
+    ],
+    "metric_name": "Coverage",
+    "metric_value": 1.0,
+    "is_active": true
   }
 }

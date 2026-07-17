@@ -47,7 +47,7 @@ class CouncilNewsConnector(BaseConnector):
         for the agent pipeline to process later.
         """
         raw_dir = os.path.join(
-            os.path.dirname(__file__), '../../../data/raw/council_news/'
+            os.path.dirname(__file__), '../../data/raw/council_news/'
         )
         os.makedirs(raw_dir, exist_ok=True)
         

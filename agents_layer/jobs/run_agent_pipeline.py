@@ -127,11 +127,17 @@ def run_agent_pipeline(area_id: int, run_connector: bool = True):
             connector = CouncilNewsConnector(db)
             connector.run()
 
-        # 2. Gather raw texts for this area_id
+        # 2. Gather raw texts for this area_id. Each source costs one LLM
+        # Extract call against a rate-limited free-tier pool shared across
+        # all areas, so cap how many we send per area rather than sending
+        # every accumulated file (repeated connector runs otherwise pile up
+        # duplicate sources per area over time - see PROCESSED_RUNS_TO_KEEP-
+        # style cleanup note in ppr_connector.py for the analogous issue).
+        MAX_SOURCES_PER_AREA = 3
         raw_dir = os.path.join(os.path.dirname(__file__), '../../data/raw/council_news/')
         search_pattern = os.path.join(raw_dir, f"area_{area_id}_*.json")
-        files = glob.glob(search_pattern)
-        
+        files = sorted(glob.glob(search_pattern), reverse=True)[:MAX_SOURCES_PER_AREA]
+
         raw_texts = []
         for file in files:
             with open(file, 'r', encoding='utf-8') as f:
