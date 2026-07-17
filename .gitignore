@@ -19,6 +19,13 @@ dist/
 # TypeScript
 *.tsbuildinfo
 
+# Large data files - not for git
+.playwright/
+data/pgdata/
+data/exports/*.json
+data/exports/*.csv
+*.zip
+
 # IDEs
 .idea/
 .vscode/
