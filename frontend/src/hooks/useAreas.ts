@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getAreas, getAreaDetail } from "../api/areas";
+import { getAreas, getAreaDetail, getAreaSummaries } from "../api/areas";
 
 export function useAreas() {
   return useQuery({
@@ -15,5 +15,13 @@ export function useAreaDetail(id: number | null) {
     queryKey: ["areas", id],
     queryFn: () => getAreaDetail(id!),
     enabled: id !== null,
+  });
+}
+
+export function useAreaSummaries() {
+  return useQuery({
+    queryKey: ["areaSummaries"],
+    queryFn: getAreaSummaries,
+    staleTime: 300_000,
   });
 }

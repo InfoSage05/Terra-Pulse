@@ -1,25 +1,26 @@
 import { useState, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import {
-  MOCK_PROPERTIES,
-  AREA_SCORES_MOCK,
-  FilterState,
-  SortOption,
-  PropertyType,
-} from "../data/mockData";
+import { useProperties } from "./useProperties";
+import { PropertyListing } from "../types/api";
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 50;
+
+export interface FilterState {
+  minPrice: number | null;
+  maxPrice: number | null;
+}
+
+export type SortOption = "price_asc" | "price_desc" | "recent";
 
 export interface SearchState {
-  properties: typeof MOCK_PROPERTIES;
+  properties: PropertyListing[];
   filteredCount: number;
   page: number;
   totalPages: number;
-  pagedProperties: typeof MOCK_PROPERTIES;
+  isLoading: boolean;
   filters: FilterState;
   sortBy: SortOption;
   selectedPropertyId: number | null;
-  areaScores: typeof AREA_SCORES_MOCK;
   setFilters: (f: Partial<FilterState>) => void;
   setSortBy: (s: SortOption) => void;
   setPage: (p: number) => void;
@@ -30,19 +31,20 @@ export interface SearchState {
 function filtersFromParams(sp: URLSearchParams): FilterState {
   const minPrice = sp.get("minPrice");
   const maxPrice = sp.get("maxPrice");
-  const propertyType = sp.get("propertyType");
   return {
     minPrice: minPrice ? Number(minPrice) : null,
     maxPrice: maxPrice ? Number(maxPrice) : null,
-    propertyType: (propertyType as PropertyType) || null,
   };
 }
 
-function paramsFromFilters(f: FilterState, sort: SortOption, page: number): Record<string, string> {
+function paramsFromFilters(
+  f: FilterState,
+  sort: SortOption,
+  page: number
+): Record<string, string> {
   const p: Record<string, string> = {};
   if (f.minPrice) p.minPrice = String(f.minPrice);
   if (f.maxPrice) p.maxPrice = String(f.maxPrice);
-  if (f.propertyType) p.propertyType = f.propertyType;
   if (sort !== "price_asc") p.sort = sort;
   if (page > 0) p.page = String(page);
   return p;
@@ -50,46 +52,29 @@ function paramsFromFilters(f: FilterState, sort: SortOption, page: number): Reco
 
 export function useSearchState(): SearchState {
   const [searchParams, setSearchParams] = useSearchParams();
-
-  const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
-  const sortBy: SortOption = (searchParams.get("sort") as SortOption) || "price_asc";
-  const page = Number(searchParams.get("page") || "0");
-
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
 
-  const filtered = useMemo(() => {
-    let result = [...MOCK_PROPERTIES];
+  const filters = useMemo(() => filtersFromParams(searchParams), [searchParams]);
+  const sortBy: SortOption =
+    (searchParams.get("sort") as SortOption) || "price_asc";
+  const page = Number(searchParams.get("page") || "0");
 
-    if (filters.minPrice) {
-      result = result.filter(p => p.price_eur >= filters.minPrice!);
-    }
-    if (filters.maxPrice) {
-      result = result.filter(p => p.price_eur <= filters.maxPrice!);
-    }
-    if (filters.propertyType) {
-      result = result.filter(p => p.property_type === filters.propertyType);
-    }
+  const query = useMemo(
+    () => ({
+      min_price: filters.minPrice ?? undefined,
+      max_price: filters.maxPrice ?? undefined,
+      sort_by: sortBy === "price_asc" ? "price_asc" as const
+        : sortBy === "price_desc" ? "price_desc" as const
+        : "recent" as const,
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+    }),
+    [filters.minPrice, filters.maxPrice, sortBy, page]
+  );
 
-    result.sort((a, b) => {
-      switch (sortBy) {
-        case "price_asc": return a.price_eur - b.price_eur;
-        case "price_desc": return b.price_eur - a.price_eur;
-        case "recent": return new Date(b.sale_date).getTime() - new Date(a.sale_date).getTime();
-        case "score": {
-          const sa = AREA_SCORES_MOCK[a.area_id]?.livability ?? 0;
-          const sb = AREA_SCORES_MOCK[b.area_id]?.livability ?? 0;
-          return sb - sa;
-        }
-        default: return 0;
-      }
-    });
+  const { data: properties = [], isLoading } = useProperties(query);
 
-    return result;
-  }, [filters, sortBy]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const clampedPage = Math.min(page, totalPages - 1);
-  const pagedProperties = filtered.slice(clampedPage * PAGE_SIZE, (clampedPage + 1) * PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(properties.length / PAGE_SIZE) + (properties.length === PAGE_SIZE ? 1 : 0));
 
   const updateParams = useCallback(
     (f: Partial<FilterState>, sort?: SortOption, p?: number) => {
@@ -121,15 +106,14 @@ export function useSearchState(): SearchState {
   }, [setSearchParams]);
 
   return {
-    properties: filtered,
-    filteredCount: filtered.length,
-    page: clampedPage,
+    properties,
+    filteredCount: properties.length,
+    page,
     totalPages,
-    pagedProperties,
+    isLoading,
     filters,
     sortBy,
     selectedPropertyId,
-    areaScores: AREA_SCORES_MOCK,
     setFilters,
     setSortBy: setSortByFn,
     setPage: setPageFn,

@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Sparkles, TrendingUp, Shield, Brain } from "lucide-react";
+import { Search, Sparkles, TrendingUp, Shield, Brain, Loader2 } from "lucide-react";
 import { SiteHeader } from "../components/layout/SiteHeader";
-import { MOCK_AREAS, AREA_SCORES_MOCK } from "../data/mockData";
-import { scoreColor } from "../lib/theme";
+import { useAreaSummaries } from "../hooks/useAreas";
 
 export function HomePage() {
   const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState("");
+  const { data: areas, isLoading, isError } = useAreaSummaries();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +22,6 @@ export function HomePage() {
     <div className="min-h-screen bg-gray-50">
       <SiteHeader />
 
-      {/* Hero */}
       <section className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800">
         <div className="absolute inset-0 opacity-10" style={{
           backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 80%, white 1px, transparent 1px)",
@@ -36,7 +35,6 @@ export function HomePage() {
             Property prices, safety scores, and AI-verified livability signals — all in one map.
           </p>
 
-          {/* Search bar + AI button */}
           <form onSubmit={handleSearch} className="flex items-center gap-3 max-w-2xl mx-auto">
             <div className="flex-1 relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -66,41 +64,63 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* Browse by area */}
       <section className="max-w-6xl mx-auto px-6 py-16">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Browse by area</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {MOCK_AREAS.slice(0, 8).map((area) => {
-            const scores = AREA_SCORES_MOCK[area.id];
-            return (
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Top locations by activity</h2>
+          {areas && (
+            <span className="text-sm text-gray-400">
+              {areas.length} areas tracked · {areas.reduce((s, a) => s + a.property_count, 0).toLocaleString()} sales
+            </span>
+          )}
+        </div>
+
+        {isLoading && (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+          </div>
+        )}
+
+        {isError && (
+          <div className="text-center py-16 text-gray-400">
+            Unable to load area data. Please try again.
+          </div>
+        )}
+
+        {areas && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {areas.slice(0, 8).map((area) => (
               <button
                 key={area.id}
                 onClick={() => handleAreaClick(area.name)}
                 className="text-left bg-white rounded-xl p-5 border border-gray-200 hover:border-indigo-300 hover:shadow-md transition-all"
               >
-                <h3 className="font-semibold text-gray-900 mb-1">{area.name}</h3>
+                <div className="flex items-start justify-between mb-1">
+                  <h3 className="font-semibold text-gray-900">{area.name}</h3>
+                  <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">
+                    {area.area_type.replace("_", " ")}
+                  </span>
+                </div>
                 <p className="text-xs text-gray-400 mb-3">{area.county}</p>
                 <p className="text-lg font-bold text-gray-900">
                   €{area.avg_price.toLocaleString()}
                 </p>
-                <p className="text-xs text-gray-500 mb-3">avg. price · {area.property_count} listings</p>
-                {scores && (
-                  <div className="flex gap-3 text-xs">
-                    <span style={{ color: scoreColor(scores.safety) }} className="font-semibold">
-                      Safety {scores.safety ?? "—"}
+                <p className="text-xs text-gray-500 mb-3">
+                  avg. price · {area.property_count.toLocaleString()} sales
+                </p>
+                <div className="flex gap-3 text-xs border-t border-gray-100 pt-3">
+                  <span className="text-gray-500">
+                    Rank{" "}
+                    <span className="font-bold text-indigo-600">
+                      #{areas.indexOf(area) + 1}
                     </span>
-                    <span style={{ color: scoreColor(scores.livability) }} className="font-semibold">
-                      Live {scores.livability ?? "—"}
-                    </span>
-                  </div>
-                )}
+                  </span>
+                </div>
               </button>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
-      {/* How it works */}
       <section className="bg-white border-t border-gray-100">
         <div className="max-w-6xl mx-auto px-6 py-16">
           <h2 className="text-2xl font-bold text-gray-900 mb-8">How TerraPulse works</h2>

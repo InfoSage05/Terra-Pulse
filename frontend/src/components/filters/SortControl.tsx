@@ -1,5 +1,5 @@
 import React from "react";
-import type { SortOption } from "../../data/mockData";
+import { SortOption } from "../../hooks/useSearchState";
 
 interface SortControlProps {
   value: SortOption;
@@ -10,7 +10,6 @@ const OPTIONS: { value: SortOption; label: string }[] = [
   { value: "price_asc", label: "Price: Low to High" },
   { value: "price_desc", label: "Price: High to Low" },
   { value: "recent", label: "Most Recent" },
-  { value: "score", label: "Livability Score" },
 ];
 
 export function SortControl({ value, onChange }: SortControlProps) {
@@ -28,7 +27,9 @@ export function SortControl({ value, onChange }: SortControlProps) {
         className={selectClass}
       >
         {OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
         ))}
       </select>
     </div>

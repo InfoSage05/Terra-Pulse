@@ -45,6 +45,7 @@ class AreaScoreOutput(BaseModel):
 class PropertyListing(BaseModel):
     id: int
     area_id: int
+    area_name: Optional[str] = None
     address_raw: str
     price_eur: float
     sale_date: str

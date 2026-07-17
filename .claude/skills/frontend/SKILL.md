@@ -11,3 +11,9 @@ When working on the Frontend Layer for TerraPulse, strictly adhere to the follow
 2. **Map View Architecture**: `MapPage.tsx` manages the state for active overlays and the selected area detail side-panel.
 3. **Choropleth Visualisation**: Use a generic `ScoreLayer.tsx` to dynamically color GeoJSON polygons fetched from PostGIS based on Price, Affordability, Safety, or Livability.
 4. **Review Flag UI Rule (CRITICAL)**: To fulfill the contract from Phase 2/3, any area where `needs_human_review = True` MUST receive an unmissable visual warning marker. Display this both on the map directly (`AreaMarker.tsx`) and within the side panel (`ReviewFlagBanner.tsx`), explicitly stating that qualitative data disagrees with hard metrics.
+
+A full design token system — dark slate palette, violet brand accent, score-color logic (emerald/amber/rose), and three deliberate typefaces (Fraunces for display, Inter for UI, JetBrains Mono for all numbers/scores)
+The ScorePill as the signature UI atom — that color-coded chip becomes the visual language that makes TerraPulse instantly recognisable
+Complete component inventory with prop contracts for PropertyCard, ReviewFlagBanner, AreaMarker, etc.
+The repo scanning commands baked in as a rule — any agent must run those grep commands before touching ForSalePage.tsx so it only wires real backend fields, never invents fake ones
+Responsive breakpoints, animation rules with prefers-reduced-motion guards, and accessibility baseline

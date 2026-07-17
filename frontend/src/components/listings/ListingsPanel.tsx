@@ -2,10 +2,10 @@ import React, { useRef, useEffect } from "react";
 import { PropertyCard } from "./PropertyCard";
 import { ListingsCount } from "./ListingsCount";
 import { LoadMoreButton } from "./LoadMoreButton";
-import type { MockProperty } from "../../data/mockData";
+import { PropertyListing } from "../../types/api";
 
 interface ListingsPanelProps {
-  properties: MockProperty[];
+  properties: PropertyListing[];
   filteredCount: number;
   page: number;
   totalPages: number;

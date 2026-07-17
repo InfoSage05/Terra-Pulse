@@ -6,9 +6,9 @@ import json
 
 def get_areas(db: Session, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
     query = text("""
-        SELECT id, name, area_type, county, ST_AsGeoJSON(geometry) as geometry
-        FROM areas
-        ORDER BY id
+        SELECT a.id, a.name, a.area_type, a.county, ST_AsGeoJSON(a.geometry) as geometry
+        FROM areas a
+        ORDER BY a.id
         LIMIT :limit OFFSET :offset
     """)
     result = db.execute(query, {"limit": limit, "offset": offset})
@@ -20,6 +20,26 @@ def get_areas(db: Session, limit: int = 100, offset: int = 0) -> List[Dict[str, 
             row_dict["geometry"] = json.loads(row_dict["geometry"])
         areas.append(row_dict)
     return areas
+
+
+def get_area_summaries(db: Session) -> List[Dict[str, Any]]:
+    query = text("""
+        SELECT 
+            a.id, a.name, a.area_type, a.county,
+            COALESCE(ps.avg_price, 0) as avg_price,
+            COALESCE(ps.sales_count, 0) as property_count
+        FROM areas a
+        LEFT JOIN LATERAL (
+            SELECT 
+                ROUND(AVG(price_eur))::int as avg_price,
+                COUNT(*)::int as sales_count
+            FROM property_sales
+            WHERE area_id = a.id AND price_eur > 0
+        ) ps ON true
+        ORDER BY ps.sales_count DESC NULLS LAST
+    """)
+    result = db.execute(query)
+    return [dict(row._mapping) for row in result]
 
 def get_area_by_id(db: Session, area_id: int) -> Optional[Dict[str, Any]]:
     query = text("""

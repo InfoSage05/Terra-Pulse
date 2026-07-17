@@ -1,8 +1,7 @@
 import React from "react";
 import { PriceRangeFilter } from "./PriceRangeFilter";
-import { PropertyTypeFilter } from "./PropertyTypeFilter";
 import { SortControl } from "./SortControl";
-import type { FilterState, SortOption } from "../../data/mockData";
+import { FilterState, SortOption } from "../../hooks/useSearchState";
 
 interface FilterBarProps {
   filters: FilterState;
@@ -18,11 +17,6 @@ export function FilterBar({ filters, sortBy, onFiltersChange, onSortChange }: Fi
         minPrice={filters.minPrice}
         maxPrice={filters.maxPrice}
         onChange={(f) => onFiltersChange(f)}
-      />
-      <div className="w-px h-6 bg-gray-200" />
-      <PropertyTypeFilter
-        value={filters.propertyType}
-        onChange={(t) => onFiltersChange({ propertyType: t })}
       />
       <div className="w-px h-6 bg-gray-200" />
       <SortControl value={sortBy} onChange={onSortChange} />

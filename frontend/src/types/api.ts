@@ -53,6 +53,27 @@ export interface AreaDetail {
   name: string;
   area_type: string;
   county: string;
-  geometry?: any; // GeoJSON
+  geometry?: any;
   metrics?: AreaMetrics;
+}
+
+export interface AreaSummary {
+  id: number;
+  name: string;
+  area_type: string;
+  county: string;
+  avg_price: number;
+  property_count: number;
+}
+
+export interface PropertyListing {
+  id: number;
+  area_id: number;
+  area_name: string | null;
+  address_raw: string;
+  price_eur: number;
+  sale_date: string;
+  property_type: string | null;
+  lat: number | null;
+  lon: number | null;
 }

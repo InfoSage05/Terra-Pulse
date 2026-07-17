@@ -118,6 +118,7 @@ export function MapPage() {
       <Map
         defaultCenter={DUBLIN_CENTER}
         defaultZoom={11}
+        mapId="DEMO_MAP_ID"
         style={{ height: "100%", width: "100%" }}
         gestureHandling="greedy"
         disableDefaultUI={false}

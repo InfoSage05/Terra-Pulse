@@ -1,11 +1,12 @@
 import React from "react";
 import { SiteHeader } from "../components/layout/SiteHeader";
-import { MOCK_AREAS, AREA_SCORES_MOCK } from "../data/mockData";
-import { scoreColor } from "../lib/theme";
+import { useAreaSummaries } from "../hooks/useAreas";
 import { useNavigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 
 export function AreasPage() {
   const navigate = useNavigate();
+  const { data: areas, isLoading, isError } = useAreaSummaries();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -14,13 +15,24 @@ export function AreasPage() {
       <div className="max-w-6xl mx-auto px-6 py-10">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Dublin Areas</h1>
         <p className="text-sm text-gray-500 mb-8">
-          {MOCK_AREAS.length} areas tracked across postal districts and suburbs
+          {areas ? `${areas.length} areas` : "..."} tracked across postal districts and suburbs
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {MOCK_AREAS.map((area) => {
-            const scores = AREA_SCORES_MOCK[area.id];
-            return (
+        {isLoading && (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+          </div>
+        )}
+
+        {isError && (
+          <div className="text-center py-16 text-gray-400">
+            Unable to load area data.
+          </div>
+        )}
+
+        {areas && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {areas.map((area) => (
               <button
                 key={area.id}
                 onClick={() => navigate(`/search?location=${encodeURIComponent(area.name)}`)}
@@ -38,26 +50,23 @@ export function AreasPage() {
                   <span className="text-lg font-bold text-gray-900">
                     €{area.avg_price.toLocaleString()}
                   </span>
-                  <span className="text-xs text-gray-500">avg · {area.property_count} listings</span>
+                  <span className="text-xs text-gray-500">
+                    avg · {area.property_count.toLocaleString()} sales
+                  </span>
                 </div>
 
-                {scores && (
-                  <div className="flex gap-4 text-xs border-t border-gray-100 pt-3">
-                    <span className="text-gray-500">
-                      Safety <span className="font-bold" style={{ color: scoreColor(scores.safety) }}>{scores.safety ?? "—"}</span>
+                <div className="flex gap-4 text-xs border-t border-gray-100 pt-3">
+                  <span className="text-gray-500">
+                    Rank{" "}
+                    <span className="font-bold text-indigo-600">
+                      #{areas.indexOf(area) + 1}
                     </span>
-                    <span className="text-gray-500">
-                      Afford <span className="font-bold" style={{ color: scoreColor(scores.affordability) }}>{scores.affordability ?? "—"}</span>
-                    </span>
-                    <span className="text-gray-500">
-                      Live <span className="font-bold" style={{ color: scoreColor(scores.livability) }}>{scores.livability ?? "—"}</span>
-                    </span>
-                  </div>
-                )}
+                  </span>
+                </div>
               </button>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
