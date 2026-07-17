@@ -2,16 +2,26 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Sparkles } from "lucide-react";
 import { HERO_IMAGE_URL } from "../../lib/images";
-
-const TRUST_CHIPS = [
-  "✦ 2,400+ listings",
-  "⬡ AI-verified scores",
-  "↻ Updated daily",
-];
+import { useFeaturedNeighborhoods } from "../../hooks/useNeighborhoods";
 
 export function HeroSection() {
   const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState("");
+  const { data: ppr } = useFeaturedNeighborhoods(1);
+
+  const listingCount = ppr?.ppr_total_sales
+    ? `${(ppr.ppr_total_sales / 1000).toFixed(0)}k+ listings`
+    : "250k+ listings";
+
+  const updatedDate = ppr?.ppr_latest_sale
+    ? `Updated ${new Date(ppr.ppr_latest_sale).toLocaleDateString("en-IE", { day: "numeric", month: "short" })}`
+    : "Updated daily";
+
+  const trustChips = [
+    `✦ ${listingCount}`,
+    "⬡ AI-verified scores",
+    `↻ ${updatedDate}`,
+  ];
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +92,7 @@ export function HeroSection() {
           className="animate-fade-up flex flex-wrap items-center justify-center gap-2 mt-6"
           style={{ animationDelay: "300ms" }}
         >
-          {TRUST_CHIPS.map((chip) => (
+          {trustChips.map((chip) => (
             <span
               key={chip}
               className="border border-slate-700 bg-slate-900/60 backdrop-blur text-slate-300 text-sm px-3 py-1 rounded-full"
