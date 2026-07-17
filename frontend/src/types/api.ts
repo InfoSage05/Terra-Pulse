@@ -77,3 +77,12 @@ export interface PropertyListing {
   lat: number | null;
   lon: number | null;
 }
+
+export interface Neighborhood {
+  locality: string;
+  eircode_district: string | null;
+  median_sold_price: number | null;
+  average_sold_price: number | null;
+  avg_asking_price: number | null;
+  data_source: string | null;
+}

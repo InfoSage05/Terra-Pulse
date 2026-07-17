@@ -2,20 +2,20 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Search, Sparkles, TrendingUp, Shield, Brain, Loader2 } from "lucide-react";
 import { SiteHeader } from "../components/layout/SiteHeader";
-import { useAreaSummaries } from "../hooks/useAreas";
+import { useNeighborhoods } from "../hooks/useNeighborhoods";
 
 export function HomePage() {
   const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState("");
-  const { data: areas, isLoading, isError } = useAreaSummaries();
+  const { data: hoods, isLoading } = useNeighborhoods({ limit: 8 });
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     navigate(`/search?location=${encodeURIComponent(searchValue)}`);
   };
 
-  const handleAreaClick = (areaName: string) => {
-    navigate(`/search?location=${encodeURIComponent(areaName)}`);
+  const handleNeighborhoodClick = (name: string) => {
+    navigate(`/search?location=${encodeURIComponent(name)}`);
   };
 
   return (
@@ -42,7 +42,7 @@ export function HomePage() {
                 type="text"
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
-                placeholder="Enter an area, e.g. Dublin 8, Ranelagh..."
+                placeholder="Enter a neighbourhood, e.g. Ranelagh, Ballsbridge..."
                 className="w-full h-14 pl-12 pr-4 text-base bg-white rounded-2xl shadow-lg border-0 focus:outline-none focus:ring-4 focus:ring-indigo-300"
               />
             </div>
@@ -65,14 +65,7 @@ export function HomePage() {
       </section>
 
       <section className="max-w-6xl mx-auto px-6 py-16">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Top locations by activity</h2>
-          {areas && (
-            <span className="text-sm text-gray-400">
-              {areas.length} areas tracked · {areas.reduce((s, a) => s + a.property_count, 0).toLocaleString()} sales
-            </span>
-          )}
-        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Featured Dublin neighbourhoods</h2>
 
         {isLoading && (
           <div className="flex items-center justify-center py-16">
@@ -80,40 +73,42 @@ export function HomePage() {
           </div>
         )}
 
-        {isError && (
-          <div className="text-center py-16 text-gray-400">
-            Unable to load area data. Please try again.
-          </div>
-        )}
-
-        {areas && (
+        {hoods && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {areas.slice(0, 8).map((area) => (
+            {hoods.map((hood, i) => (
               <button
-                key={area.id}
-                onClick={() => handleAreaClick(area.name)}
+                key={hood.locality}
+                onClick={() => handleNeighborhoodClick(hood.locality)}
                 className="text-left bg-white rounded-xl p-5 border border-gray-200 hover:border-indigo-300 hover:shadow-md transition-all"
               >
                 <div className="flex items-start justify-between mb-1">
-                  <h3 className="font-semibold text-gray-900">{area.name}</h3>
-                  <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">
-                    {area.area_type.replace("_", " ")}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-400 mb-3">{area.county}</p>
-                <p className="text-lg font-bold text-gray-900">
-                  €{area.avg_price.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-500 mb-3">
-                  avg. price · {area.property_count.toLocaleString()} sales
-                </p>
-                <div className="flex gap-3 text-xs border-t border-gray-100 pt-3">
-                  <span className="text-gray-500">
-                    Rank{" "}
-                    <span className="font-bold text-indigo-600">
-                      #{areas.indexOf(area) + 1}
+                  <h3 className="font-semibold text-gray-900">{hood.locality}</h3>
+                  {hood.eircode_district && (
+                    <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">
+                      {hood.eircode_district}
                     </span>
+                  )}
+                </div>
+                {hood.median_sold_price && (
+                  <p className="text-lg font-bold text-gray-900 mt-2">
+                    €{Number(hood.median_sold_price).toLocaleString()}
+                  </p>
+                )}
+                {hood.avg_asking_price && (
+                  <p className="text-xs text-gray-400 mb-2">
+                    asking: €{Number(hood.avg_asking_price).toLocaleString()}
+                  </p>
+                )}
+                <div className="flex gap-3 text-xs border-t border-gray-100 pt-3 mt-1">
+                  <span className="flex items-center gap-1 text-gray-500">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block" />
+                    Rank #{i + 1}
                   </span>
+                  {hood.data_source && (
+                    <span className="text-gray-400 truncate text-[10px] max-w-[200px]">
+                      {hood.data_source.replace(/;.*$/, "")}
+                    </span>
+                  )}
                 </div>
               </button>
             ))}
