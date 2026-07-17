@@ -12,13 +12,13 @@ interface FilterBarProps {
 
 export function FilterBar({ filters, sortBy, onFiltersChange, onSortChange }: FilterBarProps) {
   return (
-    <div className="px-5 py-3 bg-white border-b border-gray-200 flex flex-wrap items-center gap-3">
+    <div className="px-5 py-3 bg-slate-950 border-b border-slate-800 flex flex-wrap items-center gap-3">
       <PriceRangeFilter
         minPrice={filters.minPrice}
         maxPrice={filters.maxPrice}
         onChange={(f) => onFiltersChange(f)}
       />
-      <div className="w-px h-6 bg-gray-200" />
+      <div className="w-px h-6 bg-slate-800" />
       <SortControl value={sortBy} onChange={onSortChange} />
     </div>
   );

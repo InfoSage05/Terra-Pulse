@@ -7,7 +7,7 @@ interface ListingsCountProps {
 
 export function ListingsCount({ total, showing }: ListingsCountProps) {
   return (
-    <div className="px-5 py-2 text-xs text-gray-400 bg-gray-50 border-b border-gray-100">
+    <div className="px-5 py-2 text-xs text-slate-500 bg-slate-900/60 border-b border-slate-800 font-mono">
       Showing {showing} of {total.toLocaleString()} properties
     </div>
   );

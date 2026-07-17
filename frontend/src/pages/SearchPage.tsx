@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Map, useMap } from "@vis.gl/react-google-maps";
+import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { useSearchParams } from "react-router-dom";
 import { SiteHeader } from "../components/layout/SiteHeader";
 import { SplitLayout } from "../components/layout/SplitLayout";
@@ -14,7 +14,8 @@ import { useAreas } from "../hooks/useAreas";
 import { FilterState, SortOption } from "../hooks/useSearchState";
 import { ScoreType } from "../lib/colourScales";
 
-const DUBLIN_CENTER = { lat: 53.3498, lng: -6.2603 };
+const DUBLIN_CENTER: [number, number] = [53.3498, -6.2603];
+const DARK_TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
 function MapContent({
   properties,
@@ -32,24 +33,20 @@ function MapContent({
   const map = useMap();
   const [zoom, setZoom] = useState(11);
 
-  useEffect(() => {
-    if (!map) return;
-    const listener = map.addListener("zoom_changed", () =>
-      setZoom(map.getZoom() ?? 11)
-    );
-    setZoom(map.getZoom() ?? 11);
-    return () => google.maps.event.removeListener(listener);
-  }, [map]);
+  useMapEvents({
+    zoomend: () => setZoom(map.getZoom()),
+  });
 
   useEffect(() => {
-    if (selectedId && map) {
+    if (selectedId) {
       const property = properties.find((p) => p.id === selectedId);
       if (property && property.lat && property.lon) {
-        map.panTo({ lat: property.lat, lng: property.lon });
-        if (map.getZoom()! < 15) map.setZoom(15);
+        map.panTo([property.lat, property.lon]);
+        if (map.getZoom() < 15) map.setZoom(15);
       }
     }
-  }, [selectedId, map, properties]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   return (
     <>
@@ -109,23 +106,24 @@ export function SearchPage() {
       )}
       <button
         onClick={() => setShowChoropleth(!showChoropleth)}
-        className={`absolute top-3 right-3 z-10 px-3 py-1.5 rounded-lg text-xs font-semibold shadow-md transition-all ${
+        className={`absolute top-3 right-3 z-[1000] px-3 py-1.5 rounded-lg text-xs font-semibold shadow-md transition-all ${
           showChoropleth
-            ? "bg-indigo-600 text-white border border-indigo-600"
-            : "bg-white text-gray-700 hover:bg-gray-50 border border-gray-300"
+            ? "bg-violet-500 text-white border border-violet-500"
+            : "bg-slate-900/90 backdrop-blur text-slate-300 hover:bg-slate-800 border border-slate-700"
         }`}
       >
         {showChoropleth ? "Scores On" : "Scores"}
       </button>
-      <Map
-        defaultCenter={DUBLIN_CENTER}
-        defaultZoom={11}
-        mapId="DEMO_MAP_ID"
-        style={{ height: "100%", width: "100%" }}
-        gestureHandling="greedy"
-        disableDefaultUI={false}
-        zoomControl={true}
+      <MapContainer
+        center={DUBLIN_CENTER}
+        zoom={11}
+        scrollWheelZoom
+        style={{ height: "100%", width: "100%", background: "#020617" }}
       >
+        <TileLayer
+          url={DARK_TILE_URL}
+          attribution='&copy; <a href="https://carto.com/attributions">CARTO</a> &copy; OpenStreetMap contributors'
+        />
         <MapContent
           properties={state.properties}
           selectedId={state.selectedPropertyId}
@@ -133,7 +131,7 @@ export function SearchPage() {
           showChoropleth={showChoropleth}
           choroplethType={choroplethType}
         />
-      </Map>
+      </MapContainer>
     </div>
   );
 
@@ -149,7 +147,7 @@ export function SearchPage() {
         }}
       />
       {locationQuery && (
-        <div className="px-5 py-2 bg-indigo-50 border-b border-indigo-100 text-sm text-indigo-700">
+        <div className="px-5 py-2 bg-violet-500/10 border-b border-violet-500/20 text-sm text-violet-300">
           Searching in:{" "}
           <span className="font-semibold">{locationQuery}</span>
         </div>
@@ -173,7 +171,7 @@ export function SearchPage() {
   );
 
   return (
-    <div className="h-screen w-full flex flex-col">
+    <div className="h-screen w-full flex flex-col bg-slate-950">
       <SiteHeader />
       <SplitLayout mapPanel={mapPanel} listPanel={listPanel} />
     </div>

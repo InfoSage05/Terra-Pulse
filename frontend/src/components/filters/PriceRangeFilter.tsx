@@ -27,13 +27,13 @@ export function PriceRangeFilter({ minPrice, maxPrice, onChange }: PriceRangeFil
   };
 
   const inputClass =
-    "w-24 h-9 px-3 text-sm border border-gray-300 rounded-lg bg-white " +
-    "focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 " +
-    "hover:border-gray-400 transition-colors";
+    "w-24 h-9 px-3 text-sm border border-slate-700 rounded-lg bg-slate-800 text-slate-100 placeholder:text-slate-500 " +
+    "focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 " +
+    "hover:border-slate-600 transition-colors";
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs font-medium text-gray-500">Price</span>
+      <span className="text-xs font-medium text-slate-500">Price</span>
       <input
         type="number"
         placeholder="Min €"
@@ -41,7 +41,7 @@ export function PriceRangeFilter({ minPrice, maxPrice, onChange }: PriceRangeFil
         onChange={(e) => { setMinStr(e.target.value); emit(e.target.value, maxStr); }}
         className={inputClass}
       />
-      <span className="text-xs text-gray-400">–</span>
+      <span className="text-xs text-slate-600">–</span>
       <input
         type="number"
         placeholder="Max €"

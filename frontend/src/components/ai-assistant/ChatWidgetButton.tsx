@@ -11,8 +11,8 @@ export function ChatWidgetButton() {
         onClick={widget.toggle}
         className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-200 hover:scale-110 ${
           widget.isOpen
-            ? "bg-gray-800 text-white"
-            : "bg-indigo-600 text-white hover:bg-indigo-700"
+            ? "bg-slate-800 text-white border border-slate-700"
+            : "bg-violet-500 text-white hover:bg-violet-600 shadow-violet-500/30"
         }`}
         aria-label="Open AI assistant"
       >

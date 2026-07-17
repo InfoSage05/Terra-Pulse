@@ -1,4 +1,4 @@
-import { Neighborhood } from "../types/api";
+import { Neighborhood, FeaturedNeighborhoodsResponse } from "../types/api";
 import { fetchApi } from "./client";
 
 export interface NeighborhoodQuery {
@@ -12,4 +12,8 @@ export async function getNeighborhoods(query: NeighborhoodQuery = {}): Promise<N
   if (query.limit) params.set("limit", String(query.limit));
   const qs = params.toString();
   return fetchApi<Neighborhood[]>(`/neighborhoods${qs ? `?${qs}` : ""}`);
+}
+
+export async function getFeaturedNeighborhoods(limit: number = 8): Promise<FeaturedNeighborhoodsResponse> {
+  return fetchApi<FeaturedNeighborhoodsResponse>(`/neighborhoods/featured?limit=${limit}`);
 }

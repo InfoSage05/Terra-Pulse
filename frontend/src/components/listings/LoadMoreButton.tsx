@@ -14,7 +14,7 @@ export function LoadMoreButton({ page, totalPages, onLoadMore }: LoadMoreButtonP
     <div className="px-5 py-4 flex justify-center">
       <button
         onClick={onLoadMore}
-        className="flex items-center gap-2 px-6 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors shadow-sm"
+        className="flex items-center gap-2 px-6 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-sm font-medium text-slate-200 hover:bg-slate-700 hover:border-slate-600 transition-colors shadow-sm"
       >
         Load more properties
         <ChevronDown className="w-4 h-4" />

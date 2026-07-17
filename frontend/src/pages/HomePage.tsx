@@ -1,13 +1,18 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Sparkles, TrendingUp, Shield, Brain, Loader2 } from "lucide-react";
+import { Search, Sparkles, TrendingUp, Shield, Brain, Loader2, Database } from "lucide-react";
 import { SiteHeader } from "../components/layout/SiteHeader";
-import { useNeighborhoods } from "../hooks/useNeighborhoods";
+import { useFeaturedNeighborhoods } from "../hooks/useNeighborhoods";
+
+function fmt(n: number | null): string {
+  if (!n || n === 0) return "—";
+  return "€" + n.toLocaleString();
+}
 
 export function HomePage() {
   const navigate = useNavigate();
   const [searchValue, setSearchValue] = useState("");
-  const { data: hoods, isLoading } = useNeighborhoods({ limit: 8 });
+  const { data, isLoading } = useFeaturedNeighborhoods(8);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +37,7 @@ export function HomePage() {
             Find your place in Dublin
           </h1>
           <p className="text-lg text-indigo-100 mb-10 max-w-xl mx-auto">
-            Property prices, safety scores, and AI-verified livability signals — all in one map.
+            Property prices, safety scores, and AI-verified livability signals \u2014 all in one map.
           </p>
 
           <form onSubmit={handleSearch} className="flex items-center gap-3 max-w-2xl mx-auto">
@@ -64,8 +69,43 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="max-w-6xl mx-auto px-6 py-16">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Featured Dublin neighbourhoods</h2>
+      {data && (
+        <section className="max-w-6xl mx-auto px-6 py-8">
+          <div className="bg-white rounded-xl border border-green-200 p-4 flex flex-wrap items-center gap-4 text-sm">
+            <div className="flex items-center gap-2 text-green-700">
+              <Database className="w-4 h-4" />
+              <span className="font-semibold">Live PPR Data</span>
+            </div>
+            <span className="text-gray-500">|</span>
+            <span className="text-gray-700">
+              <strong>{data.ppr_total_sales.toLocaleString()}</strong> sales tracked
+            </span>
+            <span className="text-gray-500">|</span>
+            <span className="text-gray-700">
+              <strong>{data.ppr_linked_sales.toLocaleString()}</strong> linked to areas
+            </span>
+            <span className="text-gray-500">|</span>
+            <span className="text-gray-700">
+              Latest sale: <strong>{data.ppr_latest_sale ? new Date(data.ppr_latest_sale).toLocaleDateString("en-IE", { day: "numeric", month: "long", year: "numeric" }) : "N/A"}</strong>
+            </span>
+            <span className="text-gray-500">|</span>
+            <span className="text-xs text-gray-400">Source: Property Price Register, CSO RPPI, Dublish.ie</span>
+          </div>
+        </section>
+      )}
+
+      <section className="max-w-6xl mx-auto px-6 pb-16">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-gray-900">Most active neighbourhoods</h2>
+          {data?.ppr_latest_sale && (
+            <span className="text-xs text-gray-400">
+              Updated {new Date(data.ppr_latest_sale).toLocaleDateString("en-IE", { day: "numeric", month: "short", year: "numeric" })}
+            </span>
+          )}
+        </div>
+        <p className="text-sm text-gray-500 mb-6">
+          Ranked by real transaction volume from the Property Price Register, with research prices from CSO and Daft.ie
+        </p>
 
         {isLoading && (
           <div className="flex items-center justify-center py-16">
@@ -73,9 +113,9 @@ export function HomePage() {
           </div>
         )}
 
-        {hoods && (
+        {data && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {hoods.map((hood, i) => (
+            {data.neighborhoods.map((hood, i) => (
               <button
                 key={hood.locality}
                 onClick={() => handleNeighborhoodClick(hood.locality)}
@@ -83,32 +123,37 @@ export function HomePage() {
               >
                 <div className="flex items-start justify-between mb-1">
                   <h3 className="font-semibold text-gray-900">{hood.locality}</h3>
-                  {hood.eircode_district && (
-                    <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">
-                      {hood.eircode_district}
-                    </span>
-                  )}
-                </div>
-                {hood.median_sold_price && (
-                  <p className="text-lg font-bold text-gray-900 mt-2">
-                    €{Number(hood.median_sold_price).toLocaleString()}
-                  </p>
-                )}
-                {hood.avg_asking_price && (
-                  <p className="text-xs text-gray-400 mb-2">
-                    asking: €{Number(hood.avg_asking_price).toLocaleString()}
-                  </p>
-                )}
-                <div className="flex gap-3 text-xs border-t border-gray-100 pt-3 mt-1">
-                  <span className="flex items-center gap-1 text-gray-500">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 inline-block" />
-                    Rank #{i + 1}
+                  <span className="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">
+                    {hood.eircode_district ?? "—"}
                   </span>
-                  {hood.data_source && (
-                    <span className="text-gray-400 truncate text-[10px] max-w-[200px]">
-                      {hood.data_source.replace(/;.*$/, "")}
-                    </span>
-                  )}
+                </div>
+
+                {hood.ppr_avg_price && (
+                  <div className="mt-2">
+                    <p className="text-xs text-gray-400 mb-0.5">PPR avg price</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {fmt(hood.ppr_avg_price)}
+                    </p>
+                  </div>
+                )}
+
+                {hood.median_sold_price && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Research median: {fmt(hood.median_sold_price)}
+                  </p>
+                )}
+
+                {hood.ppr_sales_count && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    {hood.ppr_sales_count.toLocaleString()} recorded sales
+                    {hood.ppr_latest_sale && (
+                      <> \u00b7 up to {new Date(hood.ppr_latest_sale).toLocaleDateString("en-IE", { day: "numeric", month: "short" })}</>
+                    )}
+                  </p>
+                )}
+
+                <div className="flex gap-3 text-xs border-t border-gray-100 pt-3 mt-2">
+                  <span className="text-indigo-600 font-semibold">#{i + 1} in activity</span>
                 </div>
               </button>
             ))}

@@ -85,4 +85,14 @@ export interface Neighborhood {
   average_sold_price: number | null;
   avg_asking_price: number | null;
   data_source: string | null;
+  ppr_avg_price: number | null;
+  ppr_sales_count: number | null;
+  ppr_latest_sale: string | null;
+}
+
+export interface FeaturedNeighborhoodsResponse {
+  neighborhoods: Neighborhood[];
+  ppr_total_sales: number;
+  ppr_linked_sales: number;
+  ppr_latest_sale: string | null;
 }

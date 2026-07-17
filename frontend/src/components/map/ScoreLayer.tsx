@@ -1,5 +1,6 @@
 import React from "react";
-import { Polygon } from "@vis.gl/react-google-maps";
+import { GeoJSON } from "react-leaflet";
+import type { Feature, Geometry } from "geojson";
 import { AreaDetail, AreaMetrics, AreaScoreOutput } from "../../types/api";
 import { ScoreType, getColorForScore } from "../../lib/colourScales";
 
@@ -9,23 +10,6 @@ interface ScoreLayerProps {
   scoresCache: Record<number, AreaScoreOutput>;
   metricsCache?: Record<number, AreaMetrics>;
   onAreaClick: (areaId: number) => void;
-}
-
-function geoJsonCoordsToPaths(geometry: any): google.maps.LatLngLiteral[][] {
-  if (!geometry || !geometry.coordinates) return [];
-
-  const convertRing = (ring: number[][]): google.maps.LatLngLiteral[] =>
-    ring.map(([lng, lat]) => ({ lat, lng }));
-
-  if (geometry.type === "Polygon") {
-    return geometry.coordinates.map(convertRing);
-  }
-  if (geometry.type === "MultiPolygon") {
-    return geometry.coordinates.flatMap((polygon: number[][][]) =>
-      polygon.map(convertRing)
-    );
-  }
-  return [];
 }
 
 function getScoreValue(
@@ -45,30 +29,45 @@ function getScoreValue(
   return null;
 }
 
+/**
+ * Choropleth layer: one Leaflet <GeoJSON> polygon per area, colour-scaled to
+ * the active overlay (price / affordability / safety / livability). Areas'
+ * `geometry` is already GeoJSON (lng/lat order) straight from PostGIS via the
+ * backend — no coordinate conversion needed (unlike the old Google Maps
+ * Polygon implementation, which had to flip to {lat,lng} pairs by hand).
+ */
 export function ScoreLayer({ areas, activeScoreType, scoresCache, metricsCache, onAreaClick }: ScoreLayerProps) {
   return (
     <>
-      {areas.map(area => {
+      {areas.map((area) => {
         if (!area.geometry) return null;
-        const paths = geoJsonCoordsToPaths(area.geometry);
-        if (paths.length === 0) return null;
 
         const scoreData = scoresCache[area.id];
         const metricsData = metricsCache?.[area.id];
         const val = getScoreValue(area, scoreData, metricsData, activeScoreType);
         const fillColor = getColorForScore(activeScoreType, val);
 
+        const feature: Feature<Geometry> = {
+          type: "Feature",
+          properties: { id: area.id },
+          geometry: area.geometry,
+        };
+
         return (
-          <Polygon
-            key={`${area.id}-${activeScoreType}`}
-            paths={paths}
-            options={{
+          <GeoJSON
+            key={`${area.id}-${activeScoreType}-${fillColor}`}
+            data={feature}
+            style={{
               fillColor,
               fillOpacity: 0.55,
-              strokeColor: "#ffffff",
-              strokeWeight: 1,
+              color: "#ffffff",
+              weight: 1,
             }}
-            onClick={() => onAreaClick(area.id)}
+            eventHandlers={{
+              click: () => onAreaClick(area.id),
+              mouseover: (e) => e.target.setStyle({ fillOpacity: 0.75, weight: 2 }),
+              mouseout: (e) => e.target.setStyle({ fillOpacity: 0.55, weight: 1 }),
+            }}
           />
         );
       })}

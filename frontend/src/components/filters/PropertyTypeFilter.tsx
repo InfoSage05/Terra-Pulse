@@ -8,13 +8,13 @@ interface PropertyTypeFilterProps {
 
 export function PropertyTypeFilter({ value, onChange }: PropertyTypeFilterProps) {
   const selectClass =
-    "h-9 px-3 text-sm border border-gray-300 rounded-lg bg-white " +
-    "focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 " +
-    "hover:border-gray-400 transition-colors cursor-pointer";
+    "h-9 px-3 text-sm border border-slate-700 rounded-lg bg-slate-800 text-slate-100 " +
+    "focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 " +
+    "hover:border-slate-600 transition-colors cursor-pointer";
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-xs font-medium text-gray-500">Type</span>
+      <span className="text-xs font-medium text-slate-500">Type</span>
       <select
         value={value || ""}
         onChange={(e) => onChange((e.target.value as PropertyType) || null)}

@@ -1,5 +1,6 @@
-import React from "react";
-import { AdvancedMarker } from "@vis.gl/react-google-maps";
+import React, { useMemo } from "react";
+import { Marker, Popup } from "react-leaflet";
+import L from "leaflet";
 import { PropertyListing } from "../../types/api";
 
 function formatPrice(price: number): string {
@@ -16,29 +17,40 @@ interface PropertyMarkerProps {
 
 export function PropertyMarker({ property, isSelected, zoom, onClick }: PropertyMarkerProps) {
   const showLabel = zoom >= 11;
+
+  const icon = useMemo(() => {
+    const selectedClasses = isSelected
+      ? "background:#8b5cf6;color:#fff;border-color:#8b5cf6;box-shadow:0 4px 12px rgba(139,92,246,0.5);"
+      : "background:#1e293b;color:#e2e8f0;border-color:#334155;";
+
+    const html = showLabel
+      ? `<div style="display:flex;align-items:center;padding:3px 10px;border-radius:9999px;
+           font:600 11px 'JetBrains Mono',monospace;white-space:nowrap;border:2px solid;
+           ${selectedClasses}">${formatPrice(property.price_eur)}</div>`
+      : `<div style="width:12px;height:12px;border-radius:9999px;
+           background:${isSelected ? "#fff" : "#8b5cf6"};border:2px solid ${isSelected ? "#8b5cf6" : "transparent"};"></div>`;
+
+    return L.divIcon({
+      className: "",
+      html,
+      iconSize: showLabel ? undefined : [12, 12],
+      iconAnchor: showLabel ? [30, 12] : [6, 6],
+    });
+  }, [isSelected, showLabel, property.price_eur]);
+
   if (!property.lat || !property.lon) return null;
 
-  const baseClasses =
-    "flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold " +
-    "shadow-md border-2 cursor-pointer transition-all duration-150 " +
-    "whitespace-nowrap select-none";
-
-  const styleClasses = isSelected
-    ? "bg-gray-900 text-white border-gray-900 scale-110 shadow-lg z-10"
-    : "bg-white text-gray-900 border-gray-300 hover:scale-105 hover:shadow-lg hover:border-gray-400";
-
   return (
-    <AdvancedMarker
-      position={{ lat: property.lat!, lng: property.lon! }}
-      onClick={onClick}
-      zIndex={isSelected ? 10 : 1}
+    <Marker
+      position={[property.lat, property.lon]}
+      icon={icon}
+      zIndexOffset={isSelected ? 1000 : 0}
+      eventHandlers={{ click: onClick }}
     >
-      <div className={`${baseClasses} ${styleClasses}`}>
-        {showLabel && <span>{formatPrice(property.price_eur)}</span>}
-        {!showLabel && (
-          <div className={`w-3 h-3 rounded-full ${isSelected ? "bg-white" : "bg-indigo-600"}`} />
-        )}
-      </div>
-    </AdvancedMarker>
+      <Popup>
+        <p className="text-sm font-mono font-semibold">{formatPrice(property.price_eur)}</p>
+        <p className="text-xs text-slate-500">{property.address_raw}</p>
+      </Popup>
+    </Marker>
   );
 }

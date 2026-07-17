@@ -48,7 +48,7 @@ export function ListingsPanel({
           </div>
         ))}
         {properties.length === 0 && (
-          <div className="flex items-center justify-center h-48 text-gray-400 text-sm">
+          <div className="flex items-center justify-center h-48 text-slate-500 text-sm">
             No properties match your filters.
           </div>
         )}
