@@ -1,18 +1,33 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from typing import List, Dict, Any, Optional
 
 import json
 
-def get_areas(db: Session, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+from backend.app.core.cache import area_list_key, cache_get, cache_set, json_default
+from backend.app.core.config import settings
+
+
+async def get_areas(db: AsyncSession, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+    cache_key = area_list_key(f"areas:{limit}:{offset}")
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return json.loads(cached)
+
+    result = await _get_areas(db, limit=limit, offset=offset)
+    cache_set(cache_key, json.dumps(result, default=json_default), ttl_seconds=settings.AREA_LIST_CACHE_TTL_SECONDS)
+    return result
+
+
+async def _get_areas(db: AsyncSession, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
     query = text("""
         SELECT a.id, a.name, a.area_type, a.county, ST_AsGeoJSON(a.geometry) as geometry
         FROM areas a
         ORDER BY a.id
         LIMIT :limit OFFSET :offset
     """)
-    result = db.execute(query, {"limit": limit, "offset": offset})
-    
+    result = await db.execute(query, {"limit": limit, "offset": offset})
+
     areas = []
     for row in result:
         row_dict = dict(row._mapping)
@@ -22,15 +37,26 @@ def get_areas(db: Session, limit: int = 100, offset: int = 0) -> List[Dict[str, 
     return areas
 
 
-def get_area_summaries(db: Session) -> List[Dict[str, Any]]:
+async def get_area_summaries(db: AsyncSession) -> List[Dict[str, Any]]:
+    cache_key = area_list_key("summary")
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return json.loads(cached)
+
+    result = await _get_area_summaries(db)
+    cache_set(cache_key, json.dumps(result, default=json_default), ttl_seconds=settings.AREA_LIST_CACHE_TTL_SECONDS)
+    return result
+
+
+async def _get_area_summaries(db: AsyncSession) -> List[Dict[str, Any]]:
     query = text("""
-        SELECT 
+        SELECT
             a.id, a.name, a.area_type, a.county,
             COALESCE(ps.avg_price, 0) as avg_price,
             COALESCE(ps.sales_count, 0) as property_count
         FROM areas a
         LEFT JOIN LATERAL (
-            SELECT 
+            SELECT
                 ROUND(AVG(price_eur))::int as avg_price,
                 COUNT(*)::int as sales_count
             FROM property_sales
@@ -38,19 +64,20 @@ def get_area_summaries(db: Session) -> List[Dict[str, Any]]:
         ) ps ON true
         ORDER BY ps.sales_count DESC NULLS LAST
     """)
-    result = db.execute(query)
+    result = await db.execute(query)
     return [dict(row._mapping) for row in result]
 
-def get_area_by_id(db: Session, area_id: int) -> Optional[Dict[str, Any]]:
+
+async def get_area_by_id(db: AsyncSession, area_id: int) -> Optional[Dict[str, Any]]:
     query = text("""
         SELECT id, name, area_type, county, ST_AsGeoJSON(geometry) as geometry
         FROM areas
         WHERE id = :area_id
     """)
-    result = db.execute(query, {"area_id": area_id}).first()
+    result = (await db.execute(query, {"area_id": area_id})).first()
     if not result:
         return None
-    
+
     # Also fetch latest metrics summary
     metrics_query = text("""
         WITH price_agg AS (
@@ -65,7 +92,7 @@ def get_area_by_id(db: Session, area_id: int) -> Optional[Dict[str, Any]]:
         demo_latest AS (
             SELECT population, deprivation_index FROM area_demographics WHERE area_id = :area_id ORDER BY year DESC LIMIT 1
         )
-        SELECT 
+        SELECT
             (SELECT avg_price FROM price_agg) as avg_price,
             (SELECT sales_count FROM price_agg) as sales_count,
             (SELECT amenity_count FROM amenity_agg) as amenity_count,
@@ -73,12 +100,12 @@ def get_area_by_id(db: Session, area_id: int) -> Optional[Dict[str, Any]]:
             (SELECT population FROM demo_latest) as population,
             (SELECT deprivation_index FROM demo_latest) as deprivation_index
     """)
-    metrics = db.execute(metrics_query, {"area_id": area_id}).first()
-    
+    metrics = (await db.execute(metrics_query, {"area_id": area_id})).first()
+
     area_dict = dict(result._mapping)
     if area_dict.get("geometry"):
         area_dict["geometry"] = json.loads(area_dict["geometry"])
-        
+
     if metrics:
         area_dict["metrics"] = dict(metrics._mapping)
     return area_dict

@@ -25,7 +25,7 @@ flowchart TD
 
     subgraph L3["💾 L3 — Storage"]
         PG["PostgreSQL + PostGIS<br/>property_sales · areas · amenities<br/>crime_stats · demographics"]
-        REDIS["Redis<br/>❌ not wired to backend"]
+        REDIS["Redis<br/>✅ area_scores:* + area_list:* caching"]
     end
 
     subgraph L4["🤖 L4 — Agents + Models"]
@@ -144,12 +144,13 @@ This runs Postgres + PostGIS, Redis, the FastAPI backend, and the Vite frontend 
    ```
    Wait until `postgres` shows as `healthy`.
 
-3. **Run migrations**
+3. **Start the backend (migrations run automatically)**
    ```bash
-   for f in storage/migrations/*.sql; do
-     docker-compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f "/app/$f"
-   done
+   docker-compose up -d backend
    ```
+   `storage/scripts/run_migrations.py` runs on every backend container
+   start and is idempotent (tracks applied files in a `schema_migrations`
+   table), so there's no separate manual migration step.
 
 4. **Seed area boundaries**
    ```bash
@@ -237,6 +238,9 @@ Copy `.env.example` to `.env` and fill in at least the required values:
 | `POSTGRES_PASSWORD` | Docker | Postgres password |
 | `POSTGRES_DB` | Docker | Postgres database name |
 | `REDIS_URL` | Backend caching | Redis connection string |
+| `API_KEY` / `API_KEYS` | Backend auth | `X-API-Key` value(s); `API_KEYS` is an optional comma-separated list for rotation |
+| `CORS_ALLOWED_ORIGINS` | Backend | Comma-separated list of allowed CORS origins |
+| `AREA_SCORE_CACHE_TTL_SECONDS` / `AREA_LIST_CACHE_TTL_SECONDS` | Backend caching | Redis TTLs for score vs. list endpoints |
 | `VITE_GOOGLE_MAPS_API_KEY` | Frontend | Google Maps JavaScript API key |
 | `VITE_API_BASE_URL` | Frontend | Base URL for backend API (default: `http://localhost:8000`) |
 | `OPENROUTER_API_KEY` | Agent pipeline | OpenRouter key for LLM summarization |
@@ -271,7 +275,8 @@ Below is a concise list of what needs to be fixed before data flows end-to-end.
 |---|-------|--------|
 | 1 | **Postgres & Redis not running** | Ports 5432 and 6379 are closed. Nothing can be persisted or cached. |
 | 2 | **Python venv is broken** | `.venv/bin/pip` missing, no deps installed. `run_ingestion.py` cannot import. |
-| 3 | **No automated migration runner** | SQL DDL exists (`storage/migrations/001–008`) but nothing applies them automatically — tables only exist if someone ran the SQL manually. |
+| ~~3~~ | ~~No automated migration runner~~ | **Resolved.** `storage/scripts/run_migrations.py` is idempotent (tracks applied files in a `schema_migrations` table) and runs on every `backend`/`scheduler` container start (`backend/Dockerfile`). |
+| 10 | **A single bad row aborts an entire ingestion run** | Every connector's `load()` (`ingestion/connectors/*.py`) catches DB errors but never calls `db.rollback()`. Postgres then sits in `InFailedSqlTransaction` for the rest of that connector's shared session, so **every subsequent record in the same run fails too** — e.g. a fresh-DB PPR run fetched 8199 real rows and upserted 0. Ingestion-layer bug, not fixed as part of the backend-hardening pass. |
 
 ### Efficiency & correctness gaps
 
@@ -282,7 +287,7 @@ Below is a concise list of what needs to be fixed before data flows end-to-end.
 | 6 | **Redundant CSV copies, no cleanup** | Per-run files accumulate in `data/processed/ppr/` with no retention. Separate `manual_pulls/` and `data/exports/` add confusion. Only the master export (`data/exports/ppr_dublin_master.csv`) should be canonical. |
 | 7 | **CSO & Crime connectors return fake data** | `cso_connector.py` and `crime_connector.py` both call `_get_sample_data()` — 2 hardcoded rows each. The real endpoints (CSO PxStat HPM04, CJA01, SAPS) are known and documented but never called. |
 | 8 | **`ingestion_runs` never records row counts** | `rows_fetched`, `rows_upserted`, `rows_dead_lettered` stay at default 0. The table was built explicitly for queryable history but isn't fed. |
-| 9 | **Redis cache invalidation is a no-op** | `clear_redis_cache()` deletes keys `area_scores:*` and `area_list:*`, but the backend uses **no Redis at all** — scores are computed live from Postgres. Either wire Redis into the backend or drop the invalidation code. |
+| ~~9~~ | ~~Redis cache invalidation is a no-op~~ | **Resolved.** `backend/app/core/cache.py` + `score_service.py`/`area_service.py`/`neighborhood_service.py` wire real, fail-soft Redis caching for both `area_scores:*` and `area_list:*` - see `.claude/skills/backend/SKILL.md` for the full key/TTL contract. |
 
 ### Missing connectors (from co-intern's data source catalog)
 

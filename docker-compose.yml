@@ -40,6 +40,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      # No curl/wget in the python:3.11-slim image - Python's own stdlib
+      # http client is already present, so use that instead of adding a
+      # dependency just for this.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   scheduler:
     build:
@@ -67,4 +76,5 @@ services:
     env_file:
       - .env
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy

@@ -8,9 +8,12 @@ the caller can fall back to computing the result live from Postgres.
 Key patterns written here MUST match the patterns invalidated by
 `ingestion/jobs/scheduled_refresh.py::clear_redis_cache()`:
     - "area_scores:{area_id}" -> matches "area_scores:*"
-    - "area_list:*" is reserved for a future "list areas with scores"
-      endpoint; no backend write path exists for it yet.
+    - "area_list:{name}" -> matches "area_list:*", used by area_service.py
+      and neighborhood_service.py for the /v1/areas and /v1/neighborhoods
+      list endpoints.
 """
+import datetime
+import decimal
 import logging
 from typing import Optional
 
@@ -21,6 +24,7 @@ from backend.app.core.config import settings
 logger = logging.getLogger("terrapulse.backend.cache")
 
 AREA_SCORE_KEY_PREFIX = "area_scores"
+AREA_LIST_KEY_PREFIX = "area_list"
 
 
 def _make_client() -> Optional["redis.Redis"]:
@@ -52,6 +56,30 @@ def get_redis_client() -> Optional["redis.Redis"]:
 
 def area_score_key(area_id: int) -> str:
     return f"{AREA_SCORE_KEY_PREFIX}:{area_id}"
+
+
+def area_list_key(name: str) -> str:
+    """`name` should already encode any distinguishing query params, e.g.
+    area_list_key(f"areas:{limit}:{offset}") - different param combos are
+    different cache entries, all still swept by clear_redis_cache()'s
+    "area_list:*" glob."""
+    return f"{AREA_LIST_KEY_PREFIX}:{name}"
+
+
+def json_default(obj):
+    """`default=` callback for json.dumps() when caching raw SQL result rows.
+
+    Postgres NUMERIC columns (e.g. neighborhood_data.median_sold_price) come
+    back as decimal.Decimal via psycopg2, and DATE columns as datetime.date -
+    neither is JSON-serializable by default, unlike the FastAPI response path
+    (which runs everything through jsonable_encoder). Raises TypeError for
+    anything else, matching json.dumps()'s normal behavior for unknown types.
+    """
+    if isinstance(obj, decimal.Decimal):
+        return float(obj)
+    if isinstance(obj, (datetime.date, datetime.datetime)):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
 def cache_get(key: str) -> Optional[str]:
