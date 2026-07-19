@@ -9,32 +9,14 @@ import { LayerToggle } from "../components/map/LayerToggle";
 import { AreaMarker } from "../components/map/AreaMarker";
 import { AreaDetailPanel } from "../components/area-detail/AreaDetailPanel";
 import { SiteHeader } from "../components/layout/SiteHeader";
+import { getCentroid as getCentroidTuple } from "../lib/geo";
 
 const DUBLIN_CENTER: [number, number] = [53.3498, -6.2603];
 const DARK_TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
 function getCentroid(geometry: any): { lat: number; lng: number } | null {
-  if (!geometry || !geometry.coordinates) return null;
-
-  try {
-    let coords = geometry.coordinates;
-    if (geometry.type === "MultiPolygon") {
-      coords = coords[0][0];
-    } else if (geometry.type === "Polygon") {
-      coords = coords[0];
-    }
-
-    if (!coords || coords.length === 0 || !Array.isArray(coords[0])) return null;
-
-    let sumLat = 0, sumLng = 0;
-    coords.forEach(([lng, lat]: [number, number]) => {
-      sumLat += lat;
-      sumLng += lng;
-    });
-    return { lat: sumLat / coords.length, lng: sumLng / coords.length };
-  } catch {
-    return null;
-  }
+  const c = getCentroidTuple(geometry);
+  return c ? { lat: c[0], lng: c[1] } : null;
 }
 
 export function MapPage() {

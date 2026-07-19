@@ -18,28 +18,39 @@ const HOUSE_PHOTO_IDS = [
   "photo-1502005229762-cf1b2da7c5d6",
 ];
 
-// Only IDs individually visually confirmed as real Dublin/Ireland streetscapes
-// belong here - four previously listed IDs turned out to be unrelated stock
-// (a bus in snow, a bus on a US street, rolled yoga mats, an alpine chalet)
-// despite plausible-sounding filenames, so verify with a real screenshot
-// before adding more rather than trusting the ID alone.
-const AREA_PHOTO_IDS = [
-  "photo-1549918864-48ac978761a4", // Dublin street w/ St. Ann's Church (also used for the hero)
-  "photo-1489515217757-5fd1be406fef", // Cobh, Co. Cork - colourful terraced houses + cathedral
+// Real, individually-screenshot-verified Dublin street photos from Wikimedia
+// Commons (public domain / CC-licensed, hotlinkable via Special:FilePath).
+// A prior Unsplash-ID-guessing approach here was unreliable - IDs "verified"
+// by description alone turned out to be unrelated stock (a bus in snow, a
+// beach, a chair, zebras...), and there were only 2 working IDs left, which
+// is why every area card rendered the same couple of images. Every URL below
+// was fetched and visually confirmed to actually show a Dublin street/square
+// before being added.
+const AREA_PHOTO_URLS = [
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Tara_Street%2C_Dublin_%28DSC06440%29.jpg/960px-Tara_Street%2C_Dublin_%28DSC06440%29.jpg",
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Store_Street%2C_Dublin_%28_DSC6326%29.jpg/960px-Store_Street%2C_Dublin_%28_DSC6326%29.jpg",
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/4/48/Moore_Street_market%2C_Dublin.jpg/960px-Moore_Street_market%2C_Dublin.jpg",
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Dublin_Stephen%27s_Green-44_edit.jpg/960px-Dublin_Stephen%27s_Green-44_edit.jpg",
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Dublin_-_Merrion_Square_-_Georgian_Terraced_Houses_-_geograph.org.uk_-_1616458.jpg/960px-Dublin_-_Merrion_Square_-_Georgian_Terraced_Houses_-_geograph.org.uk_-_1616458.jpg",
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Rows_of_Georgian_Terrace_Houses_in_Fitzwilliam_St_Dublin_-_panoramio.jpg/960px-Rows_of_Georgian_Terrace_Houses_in_Fitzwilliam_St_Dublin_-_panoramio.jpg",
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/2008-05-23_The_Temple_Bar%2C_Dublin%2C_Ireland.jpg/960px-2008-05-23_The_Temple_Bar%2C_Dublin%2C_Ireland.jpg",
 ];
 
 export const HERO_IMAGE_URL =
-  "https://images.unsplash.com/photo-1549918864-48ac978761a4?q=80&w=1920&auto=format&fit=crop";
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Tara_Street%2C_Dublin_%28DSC06440%29.jpg/1920px-Tara_Street%2C_Dublin_%28DSC06440%29.jpg";
 
-function pick(ids: string[], seed: number): string {
-  const idx = Math.abs(Math.trunc(seed)) % ids.length;
-  return ids[idx];
+function pick(items: string[], seed: number): string {
+  const idx = Math.abs(Math.trunc(seed)) % items.length;
+  return items[idx];
 }
 
 export function propertyPhotoUrl(id: number, width = 800): string {
   return `https://images.unsplash.com/${pick(HOUSE_PHOTO_IDS, id)}?q=80&w=${width}&auto=format&fit=crop`;
 }
 
-export function areaPhotoUrl(id: number, width = 600): string {
-  return `https://images.unsplash.com/${pick(AREA_PHOTO_IDS, id)}?q=80&w=${width}&auto=format&fit=crop`;
+export function areaPhotoUrl(id: number, _width = 600): string {
+  // Wikimedia thumbnails are served at fixed widths baked into the URL
+  // (see the /960px-.../1920px-... path segments above), unlike Unsplash's
+  // ?w= query param, so _width is intentionally unused here.
+  return pick(AREA_PHOTO_URLS, id);
 }

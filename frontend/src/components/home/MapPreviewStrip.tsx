@@ -1,13 +1,16 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer } from "react-leaflet";
+import { MapContainer, TileLayer, CircleMarker } from "react-leaflet";
 import { ArrowRight, Map as MapIcon } from "lucide-react";
+import { useAreas } from "../../hooks/useAreas";
+import { getCentroid } from "../../lib/geo";
 
 const DUBLIN_CENTER: [number, number] = [53.3498, -6.2603];
 const DARK_TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
 export function MapPreviewStrip() {
   const navigate = useNavigate();
+  const { data: areas } = useAreas();
 
   return (
     <section className="max-w-6xl mx-auto px-6 py-12">
@@ -27,6 +30,23 @@ export function MapPreviewStrip() {
             style={{ height: "100%", width: "100%", background: "#020617" }}
           >
             <TileLayer url={DARK_TILE_URL} />
+            {areas?.map((area: any) => {
+              const centroid = getCentroid(area.geometry);
+              if (!centroid) return null;
+              return (
+                <CircleMarker
+                  key={area.id}
+                  center={centroid}
+                  radius={5}
+                  pathOptions={{
+                    color: "#a78bfa",
+                    fillColor: "#8b5cf6",
+                    fillOpacity: 0.9,
+                    weight: 1.5,
+                  }}
+                />
+              );
+            })}
           </MapContainer>
         </div>
 

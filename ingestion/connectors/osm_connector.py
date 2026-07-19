@@ -149,12 +149,11 @@ class OSMConnector(BaseConnector):
             set_=update_dict
         )
         
-        try:
-            self.db.execute(upsert_stmt)
-            return True
-        except Exception as e:
-            self.logger.error(f"DB insert failed: {e}")
-            return False
+        # Let exceptions propagate - BaseConnector.run() wraps each record's
+        # load() in a SAVEPOINT and handles rollback/logging there, so a bad
+        # row doesn't poison the rest of the connector's shared session.
+        self.db.execute(upsert_stmt)
+        return True
 
     def _get_sample_data(self):
         return [

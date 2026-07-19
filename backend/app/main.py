@@ -27,6 +27,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Browsers hide all response headers from JS by default except a small
+    # CORS-safelisted set - X-Total-Count (properties.py's real total, vs
+    # the current page's length) has to be explicitly exposed or fetch()
+    # simply can't read it cross-origin.
+    expose_headers=["X-Total-Count"],
 )
 
 app.include_router(health.router)

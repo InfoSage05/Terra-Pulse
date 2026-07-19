@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { PropertyListing } from "../../types/api";
 import { propertyPhotoUrl } from "../../lib/images";
 import { recordViewedProperty } from "../../hooks/useRecentlyViewed";
+import { isRecentSale } from "../../lib/recency";
 
 interface PropertyCardProps {
   property: PropertyListing;
@@ -18,6 +19,7 @@ interface PropertyCardProps {
 
 export function PropertyCard({ property, isNew, needsReview, variant = "full", onClick }: PropertyCardProps) {
   const navigate = useNavigate();
+  const recent = isRecentSale(property.sale_date);
   const handleClick = () => {
     recordViewedProperty(property);
     if (onClick) onClick();
@@ -81,11 +83,20 @@ export function PropertyCard({ property, isNew, needsReview, variant = "full", o
           €{property.price_eur.toLocaleString("en-IE")}
         </p>
         <p className="text-sm text-slate-300 mt-1 truncate">{property.address_raw}</p>
-        <p className="text-xs text-slate-500 mt-1">
-          {property.area_name || `Area #${property.area_id}`} · Sold{" "}
-          {property.sale_date
-            ? new Date(property.sale_date).toLocaleDateString("en-IE", { month: "short", year: "numeric" })
-            : "recently"}
+        <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+          <span>
+            {property.area_name || `Area #${property.area_id}`} · Sold{" "}
+            {property.sale_date
+              ? new Date(property.sale_date).toLocaleDateString("en-IE", { month: "short", year: "numeric" })
+              : "recently"}
+          </span>
+          {/* Every row here is already a completed PPR sale - there's no live
+              "for sale" feed to color red/green against, so this reflects
+              recency (a real signal) instead of a fabricated status. */}
+          <span
+            className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${recent ? "bg-emerald-400" : "bg-rose-400/70"}`}
+            title={recent ? "Sold within the last 90 days" : "Sold more than 90 days ago"}
+          />
         </p>
       </div>
     </button>

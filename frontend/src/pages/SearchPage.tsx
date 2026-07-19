@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { MapContainer, TileLayer, ZoomControl, useMap, useMapEvents } from "react-leaflet";
 import { useSearchParams } from "react-router-dom";
 import { SiteHeader } from "../components/layout/SiteHeader";
@@ -13,9 +13,12 @@ import { useSearchState } from "../hooks/useSearchState";
 import { useAreas } from "../hooks/useAreas";
 import { FilterState, SortOption } from "../hooks/useSearchState";
 import { ScoreType } from "../lib/colourScales";
+import { getCentroid, jitterCentroid } from "../lib/geo";
 
 const DUBLIN_CENTER: [number, number] = [53.3498, -6.2603];
 const LIGHT_TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+
+type SearchProperty = { id: number; lat: number | null; lon: number | null; price_eur: number; area_id: number; area_name: string | null; address_raw: string; sale_date: string; property_type: string | null };
 
 function MapContent({
   properties,
@@ -24,7 +27,7 @@ function MapContent({
   showChoropleth,
   choroplethType,
 }: {
-  properties: { id: number; lat: number | null; lon: number | null; price_eur: number; area_id: number; area_name: string | null; address_raw: string; sale_date: string; property_type: string | null }[];
+  properties: SearchProperty[];
   selectedId: number | null;
   onSelectProperty: (id: number) => void;
   showChoropleth: boolean;
@@ -32,6 +35,33 @@ function MapContent({
 }) {
   const map = useMap();
   const [zoom, setZoom] = useState(11);
+  const { data: areas } = useAreas();
+
+  // The PPR dataset backing this app has no per-property lat/lon (see
+  // README's ingestion issues) - fall back to the property's area centroid
+  // (jittered so properties in the same area don't stack into one dot)
+  // rather than silently dropping the marker entirely.
+  const areaCentroids = useMemo(() => {
+    const map: Record<number, [number, number]> = {};
+    (areas ?? []).forEach((a: any) => {
+      const c = getCentroid(a.geometry);
+      if (c) map[a.id] = c;
+    });
+    return map;
+  }, [areas]);
+
+  const plottable = useMemo(
+    () =>
+      properties
+        .map((p) => {
+          if (p.lat && p.lon) return { property: p, position: [p.lat, p.lon] as [number, number], approximate: false };
+          const centroid = areaCentroids[p.area_id];
+          if (!centroid) return null;
+          return { property: p, position: jitterCentroid(centroid, p.id), approximate: true };
+        })
+        .filter((x): x is { property: SearchProperty; position: [number, number]; approximate: boolean } => x !== null),
+    [properties, areaCentroids]
+  );
 
   useMapEvents({
     zoomend: () => setZoom(map.getZoom()),
@@ -39,9 +69,9 @@ function MapContent({
 
   useEffect(() => {
     if (selectedId) {
-      const property = properties.find((p) => p.id === selectedId);
-      if (property && property.lat && property.lon) {
-        map.panTo([property.lat, property.lon]);
+      const entry = plottable.find((p) => p.property.id === selectedId);
+      if (entry) {
+        map.panTo(entry.position);
         if (map.getZoom() < 15) map.setZoom(15);
       }
     }
@@ -52,17 +82,16 @@ function MapContent({
     <>
       {showChoropleth && <ScoreLayerWrapper choroplethType={choroplethType} />}
 
-      {properties
-        .filter((p) => p.lat && p.lon)
-        .map((p) => (
-          <PropertyMarker
-            key={p.id}
-            property={{ ...p, lat: p.lat!, lon: p.lon! }}
-            isSelected={selectedId === p.id}
-            zoom={zoom}
-            onClick={() => onSelectProperty(p.id)}
-          />
-        ))}
+      {plottable.map(({ property: p, position, approximate }) => (
+        <PropertyMarker
+          key={p.id}
+          property={{ ...p, lat: position[0], lon: position[1] }}
+          isSelected={selectedId === p.id}
+          zoom={zoom}
+          approximate={approximate}
+          onClick={() => onSelectProperty(p.id)}
+        />
+      ))}
     </>
   );
 }
@@ -89,12 +118,13 @@ export function SearchPage() {
   const [choroplethType, setChoroplethType] = useState<ScoreType>("price");
 
   const hasActiveFilters =
-    !!state.filters.minPrice || !!state.filters.maxPrice;
+    !!state.filters.minPrice ||
+    !!state.filters.maxPrice ||
+    !!state.filters.areaId ||
+    !!state.filters.soldAfter ||
+    !!state.filters.soldBefore;
 
-  const filterState: FilterState = {
-    minPrice: state.filters.minPrice,
-    maxPrice: state.filters.maxPrice,
-  };
+  const filterState: FilterState = state.filters;
 
   const mapPanel = (
     <div className="w-full h-full relative">

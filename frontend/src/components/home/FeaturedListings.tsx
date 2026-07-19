@@ -8,7 +8,8 @@ export function FeaturedListings() {
   // TODO: wire a dedicated GET /v1/properties/featured (or sort_by=recency)
   // endpoint once one exists — for now this reuses the real, generic listings
   // endpoint with a small limit, which is the closest real equivalent.
-  const { data: properties, isLoading } = useProperties({ limit: 6, sort_by: "recent" });
+  const { data, isLoading } = useProperties({ limit: 6, sort_by: "recent" });
+  const properties = data?.items;
 
   const areaIds = useMemo(
     () => Array.from(new Set((properties ?? []).map((p) => p.area_id).filter(Boolean))),
