@@ -1,12 +1,21 @@
-from fastapi import Security, HTTPException, status
-from fastapi.security.api_key import APIKeyHeader
-from backend.app.core.config import settings
+from datetime import datetime, timedelta
+from jose import jwt
+from passlib.context import CryptContext
+from app.core.config import settings
 
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-async def get_api_key(api_key_header: str = Security(api_key_header)):
-    if api_key_header == settings.API_KEY:
-        return api_key_header
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN, detail="Could not validate credentials"
-    )
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
+
+def create_access_token(data: dict) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+def decode_access_token(token: str) -> dict:
+    return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])

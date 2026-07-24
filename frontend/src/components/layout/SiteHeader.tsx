@@ -44,10 +44,13 @@ export function SiteHeader() {
 
       {/* Sign in */}
       <div className="ml-auto">
-        <button className="px-4 py-1.5 text-sm font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors">
-          Sign in
-        </button>
-      </div>
+  <button
+    onClick={() => navigate("/login")}
+    className="px-4 py-1.5 text-sm font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+  >
+    Sign in
+  </button>
+</div>
     </header>
   );
 }

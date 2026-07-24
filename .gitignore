@@ -22,3 +22,13 @@ dist/
 # Project Specific
 data/dead_letter/
 data/models/
+
+# Environment secrets
+.env
+.env.local
+backend/.env
+frontend/.env
+
+# Database
+*.db
+backend/terrapulse.db

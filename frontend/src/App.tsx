@@ -5,6 +5,7 @@ import { APIProvider } from "@vis.gl/react-google-maps";
 import { HomePage } from "./pages/HomePage";
 import { SearchPage } from "./pages/SearchPage";
 import { AreasPage } from "./pages/AreasPage";
+import AuthPage from "./pages/AuthPage";
 import { ChatWidgetButton } from "./components/ai-assistant/ChatWidgetButton";
 
 const queryClient = new QueryClient();
@@ -19,6 +20,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/areas" element={<AreasPage />} />
+            <Route path="/login" element={<AuthPage />} />
             <Route path="/insights" element={
               <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">

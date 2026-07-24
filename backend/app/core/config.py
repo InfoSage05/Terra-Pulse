@@ -1,11 +1,14 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
+from dotenv import load_dotenv
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+load_dotenv()
 
-    PROJECT_NAME: str = "TerraPulse Backend"
-    API_V1_STR: str = "/v1"
-    API_KEY: str = "dev_secret_key"
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/postgres"
+class Settings:
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "")
+    JWT_ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
+    JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "10080"))
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./terrapulse.db")
 
 settings = Settings()
