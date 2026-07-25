@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.api.v1.areas import router as areas_router
 
 from app.db.database import Base, engine
 from app.api.auth import router as auth_router
@@ -18,6 +19,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(areas_router)
 
 @app.get("/health")
 def health():

@@ -1,15 +1,26 @@
 import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { APIProvider } from "@vis.gl/react-google-maps";
 import { HomePage } from "./pages/HomePage";
 import { SearchPage } from "./pages/SearchPage";
 import { AreasPage } from "./pages/AreasPage";
+import { MapPage } from "./pages/MapPage";
 import AuthPage from "./pages/AuthPage";
 import { ChatWidgetButton } from "./components/ai-assistant/ChatWidgetButton";
+import { useAuth } from "./hooks/useAuth";
 
 const queryClient = new QueryClient();
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) return <div className="min-h-screen bg-gray-50" />;
+  if (!user) return <Navigate to="/login" replace />;
+
+  return <>{children}</>;
+}
 
 function App() {
   return (
@@ -21,6 +32,14 @@ function App() {
             <Route path="/search" element={<SearchPage />} />
             <Route path="/areas" element={<AreasPage />} />
             <Route path="/login" element={<AuthPage />} />
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <MapPage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/insights" element={
               <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
