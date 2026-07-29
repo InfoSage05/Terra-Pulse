@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 
 export function ReviewFlagBanner({ needsReview }: { needsReview: boolean }) {
   if (!needsReview) return null;
@@ -11,7 +11,7 @@ export function ReviewFlagBanner({ needsReview }: { needsReview: boolean }) {
     >
       <div className="flex">
         <div className="flex-shrink-0">
-          <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden="true" />
+          <TriangleAlert className="h-5 w-5 text-amber-500" aria-hidden="true" />
         </div>
         <div className="ml-3">
           <h3 className="text-sm font-bold text-amber-800">

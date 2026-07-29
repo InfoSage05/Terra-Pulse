@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import { MockProperty, AREA_SCORES_MOCK } from "../../data/mockData";
 import { scoreColor } from "../../lib/theme";
 
@@ -59,7 +59,7 @@ export function PropertyCard({ property, isSelected, onClick }: PropertyCardProp
           </span>
           {(scores.needs_human_review || property.needs_human_review) && (
             <span className="flex items-center gap-1 text-amber-600 font-medium ml-auto bg-amber-50 px-2 py-0.5 rounded-full">
-              <AlertTriangle className="w-3 h-3" />
+              <TriangleAlert className="w-3 h-3" />
               Review
             </span>
           )}

@@ -1,26 +1,18 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1.areas import router as areas_router
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from typing import List, Dict, Any
+from app.db.database import get_db
+from app.services.area_service import get_areas, get_area_by_id
 
-from app.db.database import Base, engine
-from app.api.auth import router as auth_router
-from app.core.config import settings
+router = APIRouter()
 
-Base.metadata.create_all(bind=engine)
+@router.get("/", response_model=List[Dict[str, Any]])
+def read_areas(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return get_areas(db, limit=limit, offset=skip)
 
-app = FastAPI(title="TerraPulse API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],  # must be exact origin, not "*", for cookies to work
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(auth_router)
-app.include_router(areas_router)
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+@router.get("/{area_id}", response_model=Dict[str, Any])
+def read_area(area_id: int, db: Session = Depends(get_db)):
+    area = get_area_by_id(db, area_id)
+    if area is None:
+        raise HTTPException(status_code=404, detail="Area not found")
+    return area

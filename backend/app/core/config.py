@@ -11,4 +11,8 @@ class Settings:
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./terrapulse.db")
 
+    @property
+    def cors_allowed_origins_list(self) -> list[str]:
+        return [self.FRONTEND_URL]
+
 settings = Settings()

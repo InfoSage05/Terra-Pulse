@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { AdvancedMarker, InfoWindow } from "@vis.gl/react-google-maps";
-import { AlertTriangle } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 
 interface AreaMarkerProps {
   position: google.maps.LatLngLiteral;
@@ -22,7 +22,7 @@ export function AreaMarker({ position, needsReview, onClick }: AreaMarkerProps) 
       }}
     >
       <div className="bg-amber-500 rounded-full p-1.5 shadow-lg border-2 border-white cursor-pointer hover:scale-110 transition-transform flex items-center justify-center">
-        <AlertTriangle className="w-5 h-5 text-white" />
+        <TriangleAlert className="w-5 h-5 text-white" />
       </div>
 
       {infoOpen && (
