@@ -1,52 +1,51 @@
 // TerraPulse Design System
-// Single source of truth for colors, typography, spacing, and score coding
+// Single source of truth for colors, typography, spacing, and score coding.
+// Mirrors the CSS tokens defined in `index.css` (@theme block) — keep in sync.
 
 export const colors = {
   brand: {
-    DEFAULT: "#4f46e5", // indigo-600 — distinct from Zillow's pure blue
-    hover: "#4338ca",   // indigo-700
-    light: "#eef2ff",   // indigo-50
-    accent: "#0ea5e9",  // sky-500 — wordmark accent
+    DEFAULT: "#8b5cf6", // violet-500
+    light: "#a78bfa",   // violet-400
+    hover: "#7c3aed",   // violet-600
   },
-  success: "#16a34a",   // green-600
-  warning: {
-    DEFAULT: "#d97706", // amber-600
-    light: "#fffbeb",   // amber-50
-    border: "#fcd34d",  // amber-300
-  },
-  danger: "#dc2626",    // red-600
-  text: {
-    heading: "#111827", // gray-900
-    body: "#374151",    // gray-700
-    muted: "#6b7280",   // gray-500
-    faint: "#9ca3af",   // gray-400
+  score: {
+    high: "#34d399", // emerald-400 — score >= 75
+    mid: "#fbbf24",  // amber-400   — score >= 50
+    low: "#f43f5e",  // rose-500    — score < 50
   },
   surface: {
-    DEFAULT: "#ffffff",
-    subtle: "#f9fafb",  // gray-50 — page background
-    card: "#ffffff",    // white cards on grey page
-    border: "#e5e7eb",  // gray-200
+    950: "#020617", // page background
+    900: "#0f172a", // card background
+    800: "#1e293b", // elevated card / pill background
+    700: "#334155", // border
+    600: "#475569", // muted border / divider
+  },
+  text: {
+    heading: "#f8fafc", // slate-50
+    body: "#cbd5e1",    // slate-300
+    muted: "#94a3b8",   // slate-400
+    faint: "#64748b",   // slate-500
   },
 } as const;
 
-// Score colour coding — green (high), amber (mid), red (low), grey (null)
+// Score colour coding — emerald (high) / amber (mid) / rose (low) / slate (null)
 export function scoreColor(score: number | null | undefined): string {
-  if (score === null || score === undefined) return "#9ca3af"; // gray-400
-  if (score >= 70) return "#16a34a"; // green-600
-  if (score >= 40) return "#d97706"; // amber-600
-  return "#dc2626"; // red-600
+  if (score === null || score === undefined) return "#64748b"; // slate-500 (no data)
+  if (score >= 75) return colors.score.high;
+  if (score >= 50) return colors.score.mid;
+  return colors.score.low;
 }
 
 export const typeScale = {
-  brand: "text-xl font-bold tracking-tight",
-  heroTitle: "text-4xl font-extrabold tracking-tight",
-  heroSubtitle: "text-lg font-normal",
-  cardPrice: "text-xl font-extrabold tracking-tight",
-  cardBody: "text-sm font-normal",
-  cardMeta: "text-xs font-normal",
-  filterLabel: "text-xs font-medium",
-  resultsCount: "text-sm font-medium",
-  nav: "text-sm font-medium",
+  brand: "font-display text-xl font-semibold tracking-tight",
+  heroTitle: "font-display font-bold tracking-tight text-white",
+  heroSubtitle: "font-sans text-lg font-normal text-slate-400",
+  cardPrice: "font-mono text-xl font-bold tracking-tight",
+  cardBody: "font-sans text-sm font-normal",
+  cardMeta: "font-sans text-xs font-normal",
+  filterLabel: "font-sans text-xs font-medium",
+  resultsCount: "font-sans text-sm font-medium",
+  nav: "font-sans text-sm font-medium",
 } as const;
 
 export const radius = {

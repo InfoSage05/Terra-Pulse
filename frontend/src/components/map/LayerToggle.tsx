@@ -15,16 +15,17 @@ export function LayerToggle({ activeLayer, onChange }: LayerToggleProps) {
   ];
 
   return (
-    <div className="absolute top-4 left-4 bg-white rounded-md shadow-md flex overflow-hidden z-10 border border-gray-200">
+    <div className="absolute top-4 left-4 z-[1000] bg-slate-900/90 backdrop-blur border border-slate-700 rounded-xl p-1 flex gap-1">
       {options.map((opt) => (
         <button
           key={opt.value}
           onClick={() => onChange(opt.value)}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
+          aria-pressed={activeLayer === opt.value}
+          className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
             activeLayer === opt.value
-              ? "bg-indigo-600 text-white"
-              : "bg-white text-gray-700 hover:bg-gray-50"
-          } ${opt.value !== "livability" ? "border-r border-gray-200" : ""}`}
+              ? "bg-violet-500 text-white"
+              : "text-slate-300 hover:bg-slate-800"
+          }`}
         >
           {opt.label}
         </button>

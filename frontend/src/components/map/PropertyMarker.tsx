@@ -1,6 +1,8 @@
-import React from "react";
-import { AdvancedMarker } from "@vis.gl/react-google-maps";
-import type { MockProperty } from "../../data/mockData";
+import React, { useMemo } from "react";
+import { Marker, Popup } from "react-leaflet";
+import L from "leaflet";
+import { PropertyListing } from "../../types/api";
+import { isRecentSale } from "../../lib/recency";
 
 function formatPrice(price: number): string {
   if (price >= 1_000_000) return `€${(price / 1_000_000).toFixed(1)}M`;
@@ -8,46 +10,65 @@ function formatPrice(price: number): string {
 }
 
 interface PropertyMarkerProps {
-  property: MockProperty;
+  property: PropertyListing;
   isSelected: boolean;
   zoom: number;
   onClick: () => void;
+  /** True when `property.lat`/`lon` are a jittered area-centroid fallback
+   *  (the PPR dataset this app runs on doesn't include per-property
+   *  geocoding), not the real house location - rendered with a dashed
+   *  ring so it's never mistaken for a precise pin. */
+  approximate?: boolean;
 }
 
-export function PropertyMarker({ property, isSelected, zoom, onClick }: PropertyMarkerProps) {
-  // Always show price labels — this is the core Zillow-style pattern
+export function PropertyMarker({ property, isSelected, zoom, onClick, approximate }: PropertyMarkerProps) {
   const showLabel = zoom >= 11;
+  const recent = isRecentSale(property.sale_date);
 
-  const baseClasses =
-    "flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold " +
-    "shadow-md border-2 cursor-pointer transition-all duration-150 " +
-    "whitespace-nowrap select-none";
+  const icon = useMemo(() => {
+    const dotColor = isSelected ? "#fff" : recent ? "#34d399" : "#fb7185";
+    const ringColor = isSelected ? "#8b5cf6" : recent ? "#10b981" : "#f43f5e";
+    const border = approximate ? `2px dashed ${ringColor}` : `2px solid ${isSelected ? "#8b5cf6" : "transparent"}`;
 
-  const styleClasses = isSelected
-    ? "bg-gray-900 text-white border-gray-900 scale-110 shadow-lg z-10"
-    : "bg-white text-gray-900 border-gray-300 hover:scale-105 hover:shadow-lg hover:border-gray-400";
+    const selectedClasses = isSelected
+      ? "background:#8b5cf6;color:#fff;border-color:#8b5cf6;box-shadow:0 4px 12px rgba(139,92,246,0.5);"
+      : `background:#1e293b;color:#e2e8f0;border-color:${ringColor};`;
+
+    const html = showLabel
+      ? `<div style="display:flex;align-items:center;padding:3px 10px;border-radius:9999px;
+           font:600 11px 'JetBrains Mono',monospace;white-space:nowrap;
+           border:2px ${approximate ? "dashed" : "solid"};
+           ${selectedClasses}">${formatPrice(property.price_eur)}</div>`
+      : `<div style="width:12px;height:12px;border-radius:9999px;
+           background:${dotColor};border:${border};"></div>`;
+
+    return L.divIcon({
+      className: "",
+      html,
+      iconSize: showLabel ? undefined : [12, 12],
+      iconAnchor: showLabel ? [30, 12] : [6, 6],
+    });
+  }, [isSelected, showLabel, property.price_eur, recent, approximate]);
+
+  if (!property.lat || !property.lon) return null;
 
   return (
-    <AdvancedMarker
-      position={{ lat: property.lat, lng: property.lng }}
-      onClick={onClick}
-      zIndex={isSelected ? 10 : 1}
+    <Marker
+      position={[property.lat, property.lon]}
+      icon={icon}
+      zIndexOffset={isSelected ? 1000 : 0}
+      eventHandlers={{ click: onClick }}
     >
-      <div className={`${baseClasses} ${styleClasses}`}>
-        {showLabel && <span>{formatPrice(property.price_eur)}</span>}
-        {showLabel && property.needs_human_review && (
-          <span className="flex items-center text-amber-500 ml-0.5">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-          </span>
+      <Popup>
+        <p className="text-sm font-mono font-semibold">{formatPrice(property.price_eur)}</p>
+        <p className="text-xs text-slate-500">{property.address_raw}</p>
+        <p className="text-xs text-slate-500">
+          {recent ? "Sold within the last 90 days" : "Sold more than 90 days ago"}
+        </p>
+        {approximate && (
+          <p className="text-xs text-amber-600 mt-1">Approximate location (area-level, not the exact address)</p>
         )}
-        {!showLabel && (
-          <div className={`w-3 h-3 rounded-full ${isSelected ? "bg-white" : "bg-indigo-600"}`} />
-        )}
-      </div>
-    </AdvancedMarker>
+      </Popup>
+    </Marker>
   );
 }

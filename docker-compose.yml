@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgis/postgis:15-3.3
@@ -10,7 +8,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./data/pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U terrapulse -d terrapulse"]
       interval: 5s
@@ -42,6 +40,32 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      # No curl/wget in the python:3.11-slim image - Python's own stdlib
+      # http client is already present, so use that instead of adding a
+      # dependency just for this.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["sh", "-c", "python storage/scripts/run_migrations.py && python -m ingestion.jobs.scheduled_refresh"]
+    env_file:
+      - .env
+    environment:
+      RUN_ON_STARTUP: "1"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   frontend:
     build:
@@ -52,7 +76,5 @@ services:
     env_file:
       - .env
     depends_on:
-      - backend
-
-volumes:
-  pgdata:
+      backend:
+        condition: service_healthy

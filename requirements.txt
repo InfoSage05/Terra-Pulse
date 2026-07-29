@@ -2,11 +2,13 @@ pydantic>=2.0.0
 pydantic-settings>=2.0.0
 requests
 psycopg2-binary
+asyncpg>=0.29.0
 SQLAlchemy>=2.0.0
 geoalchemy2
 python-dotenv
 overpy
 pytest
+pytest-asyncio
 openai>=1.0.0
 fastapi>=0.100.0
 uvicorn>=0.23.0

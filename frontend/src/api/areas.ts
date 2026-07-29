@@ -1,4 +1,4 @@
-import { AreaDetail, AreaScoreOutput } from "../types/api";
+import { AreaDetail, AreaScoreOutput, AreaSummary } from "../types/api";
 import { fetchApi } from "./client";
 
 export async function getAreas(): Promise<AreaDetail[]> {
@@ -11,4 +11,8 @@ export async function getAreaDetail(id: number): Promise<AreaDetail> {
 
 export async function getAreaScore(id: number): Promise<AreaScoreOutput> {
   return fetchApi<AreaScoreOutput>(`/areas/${id}/score`);
+}
+
+export async function getAreaSummaries(): Promise<AreaSummary[]> {
+  return fetchApi<AreaSummary[]>("/areas/summary");
 }

@@ -1,14 +1,132 @@
 @import "tailwindcss";
 
+/* Fonts — self-hosted via @fontsource, no external/Google Fonts CDN (privacy) */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "@fontsource/fraunces/500.css";
+@import "@fontsource/fraunces/600.css";
+@import "@fontsource/fraunces/700.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
+@import "@fontsource/jetbrains-mono/700.css";
+
+/*
+ * TerraPulse Design System — Dark Slate + Violet Brand
+ * Single source of truth for color/spacing/typography tokens.
+ * Every color in the codebase should reference these tokens — no
+ * hardcoded hex values anywhere outside this file (lib/theme.ts and
+ * lib/colourScales.ts import the same semantic values in JS form for
+ * places that need raw hex, e.g. inline SVG/marker styling).
+ */
 @theme {
-  --color-gray-50: #f9fafb;
+  /* Brand */
+  --color-brand: #8b5cf6;
+  --color-brand-DEFAULT: #8b5cf6;
+  --color-brand-light: #a78bfa;
+
+  /* Score semantics */
+  --color-score-high: #34d399;
+  --color-score-mid: #fbbf24;
+  --color-score-low: #f43f5e;
+
+  /* Dark slate surface scale (Tailwind's slate ramp, named explicitly so
+     the intent — "page bg" vs "card bg" vs "border" — is obvious in markup) */
+  --color-surface-950: #020617;
+  --color-surface-900: #0f172a;
+  --color-surface-800: #1e293b;
+  --color-surface-700: #334155;
+  --color-surface-600: #475569;
+
+  /* Fonts */
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.65);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(244, 63, 94, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 500ms ease-out both;
+}
+
+.area-marker-pulse {
+  animation: pulse-ring 2s infinite;
+}
+
+/* Respect reduced-motion preference everywhere: strip transitions,
+   animations and smooth-scroll globally rather than per-component. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-fade-up {
+    opacity: 1;
+    transform: none;
+  }
+  .area-marker-pulse {
+    animation: none;
+  }
+}
+
+/* Hide scrollbar for horizontally-scrollable snap rows (FeaturedListings) while
+   keeping the element scrollable via mouse/touch/keyboard. */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-sans);
+  background-color: var(--color-surface-950);
+  color: #e2e8f0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Leaflet dark-theme tweaks: the default Leaflet control chrome is
+   light/white by default, which clashes badly with the dark tile layer. */
+.leaflet-container {
+  background: var(--color-surface-950);
+  font-family: var(--font-sans);
+}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--color-surface-800);
+  color: #e2e8f0;
+}
+.leaflet-popup-content-wrapper {
+  border: 1px solid var(--color-surface-700);
+  border-radius: 0.75rem;
 }

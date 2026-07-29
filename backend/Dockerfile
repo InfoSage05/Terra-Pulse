@@ -13,6 +13,11 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Playwright (used by ingestion/connectors/ppr_connector.py to drive the
+# PSRA download form past its bot-defense JS challenge) needs its own
+# browser binary plus OS-level shared libs, neither of which pip installs.
+RUN playwright install --with-deps chromium
+
 # Copy source code (preserving module structure)
 COPY backend/ ./backend/
 COPY shared/ ./shared/
@@ -27,5 +32,7 @@ ENV PYTHONPATH=/app
 # Expose FastAPI port
 EXPOSE 8000
 
-# Run FastAPI via Uvicorn
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Apply any pending DB migrations, then run FastAPI via Uvicorn.
+# run_migrations.py is idempotent (tracks applied files in schema_migrations),
+# so it is safe to run on every container start.
+CMD ["sh", "-c", "python storage/scripts/run_migrations.py && uvicorn backend.app.main:app --host 0.0.0.0 --port 8000"]

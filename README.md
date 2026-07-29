@@ -4,13 +4,71 @@ TerraPulse is an agentic AI platform for analyzing housing prices and neighborho
 
 ## Architecture Overview
 
-TerraPulse is built on a 5-layer pipeline:
+TerraPulse is built on a 5-layer pipeline. Data flows from public sources through ingestion
+into Postgres, where agents and ML models process it, and a FastAPI + React stack serves it.
 
-1. **Ingestion & Storage**: Postgres + PostGIS database populated by robust Python ETL connectors.
-2. **Agents Layer**: An LLM-powered pipeline that extracts qualitative summaries and flags contradictions (`needs_human_review`). It uses an OpenAI-compatible client configured for OpenRouter or Groq, with exponential backoff and JSON-mode structured parsing.
-3. **Models Layer**: Offline generation of Price Predictions (LightGBM) and formula-based Affordability/Safety scores.
-4. **Backend**: FastAPI providing typed endpoints for areas, scores, predictions, and property listings.
-5. **Frontend**: A React + Vite + Google Maps application visualizing the data. The map view supports both area choropleth overlays and a Zillow-style property search/listings interface.
+```mermaid
+flowchart TD
+    subgraph L1["📡 L1 — Data Sources"]
+        direction LR
+        PPR["PPR ✅<br/>795k Dublin sales<br/>Live ZIP download"]
+        OSM["OSM ✅<br/>Overpass API<br/>Real amenities"]
+        CSO["CSO ❌<br/>Stub only<br/>Sample data"]
+        CRIME["Crime ❌<br/>Stub only<br/>Sample data"]
+    end
+
+    subgraph L2["🔄 L2 — Ingestion (daily at 03:00)"]
+        CONN["Python Connectors<br/>fetch → validate → upsert"]
+        SCHED["APScheduler<br/>cron trigger"]
+        SCHED --> CONN
+    end
+
+    subgraph L3["💾 L3 — Storage"]
+        PG["PostgreSQL + PostGIS<br/>property_sales · areas · amenities<br/>crime_stats · demographics"]
+        REDIS["Redis<br/>✅ area_scores:* + area_list:* caching"]
+    end
+
+    subgraph L4["🤖 L4 — Agents + Models"]
+        AG["LLM Agent Pipeline<br/>area summaries + flags"]
+        ML["LightGBM · Scoring<br/>price predictions"]
+    end
+
+    subgraph L5["🌐 L5 — Application"]
+        API["FastAPI<br/>REST endpoints"]
+        UI["React · Vite · Maps<br/>search + listing"]
+    end
+
+    L1 --> L2
+    L2 --> PG
+    L2 --> REDIS
+    PG --> L4
+    L4 --> PG
+    PG --> API
+    REDIS -.-> API
+    API --> UI
+```
+
+### PPR connector pipeline (end-to-end)
+
+```mermaid
+flowchart LR
+    A["1. Fetch<br/>Download PPR-ALL.zip<br/>795k rows · 18 MB"]
+    B["2. Filter<br/>Keep County='Dublin'"]
+    C["3. Validate<br/>Parse date, price, address<br/>Pydantic schema"]
+    D["4. Upsert<br/>ON CONFLICT skip<br/>Key: date + address + price"]
+    E["5. Export<br/>Write master CSV + JSON<br/>data/exports/"]
+    A --> B --> C --> D --> E
+    C -.-> |bad rows| DL["Dead Letter<br/>data/dead_letter/"]
+```
+
+### What each connector actually fetches
+
+| Connector | Status | Real data? | Source |
+|-----------|--------|-----------|--------|
+| PPR | ✅ Working | Yes — 795k rows from PPR-ALL.zip | propertypriceregister.ie |
+| OSM | ✅ Working | Yes — Overpass API | openstreetmap.org |
+| CSO | ❌ Stub | No — 2 hardcoded sample rows | Needs CSO PxStat HPM04 + SAPS |
+| Crime | ❌ Stub | No — 2 hardcoded sample rows | Needs CSO PxStat CJA01 |
 
 *For complete details, see [docs/architecture.md](docs/architecture.md).*
 
@@ -86,12 +144,13 @@ This runs Postgres + PostGIS, Redis, the FastAPI backend, and the Vite frontend 
    ```
    Wait until `postgres` shows as `healthy`.
 
-3. **Run migrations**
+3. **Start the backend (migrations run automatically)**
    ```bash
-   for f in storage/migrations/*.sql; do
-     docker-compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f "/app/$f"
-   done
+   docker-compose up -d backend
    ```
+   `storage/scripts/run_migrations.py` runs on every backend container
+   start and is idempotent (tracks applied files in a `schema_migrations`
+   table), so there's no separate manual migration step.
 
 4. **Seed area boundaries**
    ```bash
@@ -179,6 +238,9 @@ Copy `.env.example` to `.env` and fill in at least the required values:
 | `POSTGRES_PASSWORD` | Docker | Postgres password |
 | `POSTGRES_DB` | Docker | Postgres database name |
 | `REDIS_URL` | Backend caching | Redis connection string |
+| `API_KEY` / `API_KEYS` | Backend auth | `X-API-Key` value(s); `API_KEYS` is an optional comma-separated list for rotation |
+| `CORS_ALLOWED_ORIGINS` | Backend | Comma-separated list of allowed CORS origins |
+| `AREA_SCORE_CACHE_TTL_SECONDS` / `AREA_LIST_CACHE_TTL_SECONDS` | Backend caching | Redis TTLs for score vs. list endpoints |
 | `VITE_GOOGLE_MAPS_API_KEY` | Frontend | Google Maps JavaScript API key |
 | `VITE_API_BASE_URL` | Frontend | Base URL for backend API (default: `http://localhost:8000`) |
 | `OPENROUTER_API_KEY` | Agent pipeline | OpenRouter key for LLM summarization |
@@ -199,6 +261,46 @@ terrapulse/
 ├── shared/              # Pydantic contracts shared across layers
 └── data/                # Raw/processed/dead-letter output
 ```
+
+---
+
+## Data Ingestion: Current Issues
+
+The ingestion design is sound but the layer is **not runnable in its current state**.
+Below is a concise list of what needs to be fixed before data flows end-to-end.
+
+### Blockers (must fix to run at all)
+
+| # | Issue | Detail |
+|---|-------|--------|
+| 1 | **Postgres & Redis not running** | Ports 5432 and 6379 are closed. Nothing can be persisted or cached. |
+| 2 | **Python venv is broken** | `.venv/bin/pip` missing, no deps installed. `run_ingestion.py` cannot import. |
+| ~~3~~ | ~~No automated migration runner~~ | **Resolved.** `storage/scripts/run_migrations.py` is idempotent (tracks applied files in a `schema_migrations` table) and runs on every `backend`/`scheduler` container start (`backend/Dockerfile`). |
+| 10 | **A single bad row aborts an entire ingestion run** | Every connector's `load()` (`ingestion/connectors/*.py`) catches DB errors but never calls `db.rollback()`. Postgres then sits in `InFailedSqlTransaction` for the rest of that connector's shared session, so **every subsequent record in the same run fails too** — e.g. a fresh-DB PPR run fetched 8199 real rows and upserted 0. Ingestion-layer bug, not fixed as part of the backend-hardening pass. |
+
+### Efficiency & correctness gaps
+
+| # | Issue | Detail |
+|---|-------|--------|
+| 4 | **PPR downloads full national zip every run** | `PPR-ALL.zip` is 795k rows / 18 MB — re-downloaded daily just to keep Dublin. No incremental/delta logic. |
+| 5 | **PPR rows are not geocoded** | `area_id`, `lat`, `lon` are all `NULL` in `property_sales` after ingestion — so area-scoped scores cannot use PPR data. |
+| 6 | **Redundant CSV copies, no cleanup** | Per-run files accumulate in `data/processed/ppr/` with no retention. Separate `manual_pulls/` and `data/exports/` add confusion. Only the master export (`data/exports/ppr_dublin_master.csv`) should be canonical. |
+| 7 | **CSO & Crime connectors return fake data** | `cso_connector.py` and `crime_connector.py` both call `_get_sample_data()` — 2 hardcoded rows each. The real endpoints (CSO PxStat HPM04, CJA01, SAPS) are known and documented but never called. |
+| 8 | **`ingestion_runs` never records row counts** | `rows_fetched`, `rows_upserted`, `rows_dead_lettered` stay at default 0. The table was built explicitly for queryable history but isn't fed. |
+| ~~9~~ | ~~Redis cache invalidation is a no-op~~ | **Resolved.** `backend/app/core/cache.py` + `score_service.py`/`area_service.py`/`neighborhood_service.py` wire real, fail-soft Redis caching for both `area_scores:*` and `area_list:*` - see `.claude/skills/backend/SKILL.md` for the full key/TTL contract. |
+
+### Missing connectors (from co-intern's data source catalog)
+
+The citations document identifies 13 metric categories. Of those, only PPR and OSM are
+wired. The following have identified sources but **no connector built yet**:
+
+- CSO RPPI (monthly price index by Eircode — separate from PPR transactions)
+- CSO Census SAPS (population density, demographics)
+- CSO CJA01 (recorded crime via PxStat API)
+- NTA GTFS/GTFS-R (transport links, commute times)
+- Dublin planning portals (active construction projects)
+- Dublin City Council flood maps
+- School counts (Dept of Education, Schooldays.ie)
 
 ---
 

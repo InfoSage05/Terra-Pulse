@@ -15,13 +15,35 @@ logger = logging.getLogger(__name__)
 # Basic seed data for Dublin postal districts
 # In a real scenario, you'd load exact boundaries from a GeoJSON/Shapefile.
 # For this phase, we use simple bounding boxes or polygons to represent the areas.
-# These coords are very rough approximations.
+# These coords are very rough approximations, laid out on a grid across the
+# Dublin bounding box (53.2,-6.4 to 53.4,-6.1) so each district still gets a
+# distinct, non-overlapping cell for PostGIS point-in-polygon lookups
+# (resolve_area_id_by_point), even though the shapes don't reflect real
+# boundaries. Postal district list and name-matching coverage (Dublin 1-24,
+# plus 6W) was derived from the real 250k-row PPR export - see
+# ingestion/utils/geocoding.py::extract_dublin_postal_district.
+def _grid_polygon(col: int, row: int, cell: float = 0.028) -> str:
+    lon0 = -6.40 + col * cell
+    lat0 = 53.20 + row * cell
+    lon1 = lon0 + cell
+    lat1 = lat0 + cell
+    return f"POLYGON(({lon0} {lat0}, {lon1} {lat0}, {lon1} {lat1}, {lon0} {lat1}, {lon0} {lat0}))"
+
+# (name, grid_col, grid_row) - grid is roughly 10 cols x 7 rows across the Dublin bbox
+_POSTAL_DISTRICT_GRID = [
+    ("Dublin 1", 5, 5), ("Dublin 2", 5, 4), ("Dublin 3", 6, 5), ("Dublin 4", 5, 3),
+    ("Dublin 5", 7, 5), ("Dublin 6", 4, 3), ("Dublin 6W", 3, 3), ("Dublin 7", 4, 5),
+    ("Dublin 8", 4, 4), ("Dublin 9", 6, 6), ("Dublin 10", 2, 4), ("Dublin 11", 4, 6),
+    ("Dublin 12", 3, 4), ("Dublin 13", 8, 6), ("Dublin 14", 5, 2), ("Dublin 15", 2, 6),
+    ("Dublin 16", 4, 2), ("Dublin 17", 7, 6), ("Dublin 18", 6, 1), ("Dublin 19", 8, 5),
+    ("Dublin 20", 2, 5), ("Dublin 22", 1, 4), ("Dublin 24", 2, 3),
+]
+
 DUBLIN_AREAS = [
-    {"name": "Dublin 1", "area_type": "postal_district", "county": "Dublin", "geom": "POLYGON((-6.27 53.35, -6.24 53.35, -6.24 53.36, -6.27 53.36, -6.27 53.35))"},
-    {"name": "Dublin 2", "area_type": "postal_district", "county": "Dublin", "geom": "POLYGON((-6.27 53.33, -6.24 53.33, -6.24 53.34, -6.27 53.34, -6.27 53.33))"},
-    {"name": "Dublin 3", "area_type": "postal_district", "county": "Dublin", "geom": "POLYGON((-6.24 53.35, -6.20 53.35, -6.20 53.37, -6.24 53.37, -6.24 53.35))"},
-    {"name": "Dublin 4", "area_type": "postal_district", "county": "Dublin", "geom": "POLYGON((-6.24 53.31, -6.18 53.31, -6.18 53.33, -6.24 53.33, -6.24 53.31))"},
-    # Add a few suburbs
+    {"name": name, "area_type": "postal_district", "county": "Dublin", "geom": _grid_polygon(col, row)}
+    for name, col, row in _POSTAL_DISTRICT_GRID
+] + [
+    # A few named suburbs outside the postal-district numbering scheme
     {"name": "Blackrock", "area_type": "suburb", "county": "Dublin", "geom": "POLYGON((-6.19 53.29, -6.16 53.29, -6.16 53.31, -6.19 53.31, -6.19 53.29))"},
     {"name": "Dún Laoghaire", "area_type": "suburb", "county": "Dublin", "geom": "POLYGON((-6.15 53.28, -6.12 53.28, -6.12 53.30, -6.15 53.30, -6.15 53.28))"},
 ]

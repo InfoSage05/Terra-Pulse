@@ -35,32 +35,44 @@ def run_scheduled_ingestion():
     db_gen = get_db()
     db = next(db_gen)
     
+    # This is an orchestration-level record covering the whole scheduled job
+    # (export + cache invalidation). Each individual connector additionally
+    # creates its own 'ppr'/'osm'/'cso'/'crime' ingestion_runs row with real
+    # per-source metrics (see BaseConnector.run()).
     run_record = IngestionRun(
-        source_name='all',
+        source_name='scheduled_refresh',
         started_at=datetime.now(),
         status='running'
     )
     db.add(run_record)
     db.commit()
-    
+
     try:
         # 1. Run the connectors (this handles PPR from manual_pulls)
-        run_connectors(['all'])
-        
+        aggregate_stats = run_connectors(['all'])
+
+        # Roll up per-connector stats onto the orchestration record so it
+        # reflects real totals rather than staying at zero.
+        run_record.rows_fetched = sum(s.get('fetched', 0) for s in aggregate_stats.values())
+        run_record.rows_upserted = sum(s.get('upserted', 0) for s in aggregate_stats.values())
+        run_record.rows_dead_lettered = sum(
+            s.get('rejected', 0) + s.get('errors', 0) for s in aggregate_stats.values()
+        )
+
         # 2. Export master CSV
         export_master_files()
-        
+
         # 3. Clear Redis Cache
         # Option (b): We explicitly invalidate the keys so the frontend doesn't serve stale data.
         clear_redis_cache()
-        
+
         run_record.status = 'completed'
         logger.info("Scheduled ingestion job completed successfully.")
-        
+
     except Exception as e:
         run_record.status = 'failed'
         logger.error(f"Scheduled ingestion job failed: {e}")
-        
+
     finally:
         run_record.finished_at = datetime.now()
         db.commit()

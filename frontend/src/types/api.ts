@@ -53,6 +53,46 @@ export interface AreaDetail {
   name: string;
   area_type: string;
   county: string;
-  geometry?: any; // GeoJSON
+  geometry?: any;
   metrics?: AreaMetrics;
+}
+
+export interface AreaSummary {
+  id: number;
+  name: string;
+  area_type: string;
+  county: string;
+  avg_price: number;
+  property_count: number;
+}
+
+export interface PropertyListing {
+  id: number;
+  area_id: number;
+  area_name: string | null;
+  address_raw: string;
+  price_eur: number;
+  sale_date: string;
+  property_type: string | null;
+  lat: number | null;
+  lon: number | null;
+}
+
+export interface Neighborhood {
+  locality: string;
+  eircode_district: string | null;
+  median_sold_price: number | null;
+  average_sold_price: number | null;
+  avg_asking_price: number | null;
+  data_source: string | null;
+  ppr_avg_price: number | null;
+  ppr_sales_count: number | null;
+  ppr_latest_sale: string | null;
+}
+
+export interface FeaturedNeighborhoodsResponse {
+  neighborhoods: Neighborhood[];
+  ppr_total_sales: number;
+  ppr_linked_sales: number;
+  ppr_latest_sale: string | null;
 }

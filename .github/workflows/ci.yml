@@ -43,17 +43,17 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install alembic pytest flake8
+        pip install flake8
 
     - name: Run Migrations
       env:
         DATABASE_URL: postgresql://terrapulse:password@localhost:5432/terrapulse
       run: |
-        cd storage
-        # Assumes alembic config is present. If it uses a python script instead, adjust accordingly.
-        # This executes the alembic migrations to setup the DB schema.
-        alembic upgrade head
-        cd ..
+        # The project uses its own idempotent runner (storage/scripts/run_migrations.py,
+        # also invoked on every backend/scheduler container start - see
+        # backend/Dockerfile), not alembic - there is no alembic config in this repo.
+        python storage/scripts/run_migrations.py
+        python storage/seeds/seed_areas.py
 
     - name: Lint Python (flake8)
       run: |
@@ -64,10 +64,7 @@ jobs:
         DATABASE_URL: postgresql://terrapulse:password@localhost:5432/terrapulse
         REDIS_URL: redis://localhost:6379/0
       run: |
-        pytest backend/tests/
-        # Add other pytest paths here if they exist:
-        # pytest ingestion/tests/
-        # pytest agents_layer/tests/
+        pytest backend/tests/ shared/tests/ models_layer/registry/tests/
 
     - name: Set up Node
       uses: actions/setup-node@v3

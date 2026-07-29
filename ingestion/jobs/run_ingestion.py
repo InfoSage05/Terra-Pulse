@@ -12,27 +12,45 @@ from ingestion.utils.logging_config import setup_logger
 
 logger = setup_logger("run_ingestion")
 
-def run_connectors(sources: list[str]):
+def run_connectors(sources: list[str]) -> dict:
+    """
+    Run the requested connectors. Each connector creates and updates its own
+    `ingestion_runs` row (via BaseConnector.run()). Returns an aggregate of
+    each connector's stats dict, keyed by source name, for callers that want
+    an overall summary (e.g. the scheduled refresh job).
+    """
     db_gen = get_db()
     db = next(db_gen)
-    
+
+    aggregate_stats = {}
+
     try:
         if 'ppr' in sources or 'all' in sources:
-            PPRConnector(db).run()
-            
+            connector = PPRConnector(db)
+            connector.run()
+            aggregate_stats['ppr'] = dict(connector.stats)
+
         if 'osm' in sources or 'all' in sources:
-            OSMConnector(db).run()
-            
+            connector = OSMConnector(db)
+            connector.run()
+            aggregate_stats['osm'] = dict(connector.stats)
+
         if 'cso' in sources or 'all' in sources:
-            CSOConnector(db).run()
-            
+            connector = CSOConnector(db)
+            connector.run()
+            aggregate_stats['cso'] = dict(connector.stats)
+
         if 'crime' in sources or 'all' in sources:
-            CrimeConnector(db).run()
-            
+            connector = CrimeConnector(db)
+            connector.run()
+            aggregate_stats['crime'] = dict(connector.stats)
+
     except Exception as e:
         logger.error(f"Ingestion job failed: {e}")
     finally:
         db.close()
+
+    return aggregate_stats
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run TerraPulse data ingestion connectors.")

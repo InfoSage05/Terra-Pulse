@@ -17,14 +17,15 @@ This document outlines the architectural decisions and pipeline flow for the Ter
 ## 3. Models Layer
 - **Sequential Evaluation**: Machine learning models (Price Prediction using LightGBM) and rule-based models (Affordability, Safety, Livability) are versioned and stored in `models_layer/registry/models`.
 - **Promotion Rule**: A model is only promoted to active (`is_active=True`) if it strictly outperforms the current active model in its specific metric.
-- **Scoring Formulas**:
+- **Scoring Formulas** (defined once in `shared/scoring_formulas.py`, imported by both the backend and the training scripts - never duplicated inline):
   - **Affordability**: `Score = max(0, 100 - (Price / 10000) * 0.6 - (Deprivation * 10) * 0.4)`
   - **Safety**: `Score = max(0, 100 - (Crime / Population * 1000) * 2)`
 
 ## 4. Backend Layer (FastAPI)
-- **API Interface**: A strict REST API serves area data, price predictions (`POST /v1/predict/price`), and structured area scores (`GET /v1/areas/{id}/score`).
+- **API Interface**: A strict REST API serves area data, price predictions (`POST /v1/predict/price`), and structured area scores (`GET /v1/areas/{id}/score`), fully async (SQLAlchemy `AsyncSession` over `asyncpg` - see `backend/app/db/session.py`, independent of the sync engine `storage/scripts/db_connect.py` provides to ingestion/models/scripts).
 - **Review Gate Passthrough (CRITICAL)**: The `/v1/areas/{id}/score` endpoint preserves the `needs_human_review` boolean from Phase 2. It must never silently average a flagged signal into a clean score.
-- **Stateless Inference**: Endpoints run fast inference on-request by querying active models directly from the file registry, caching score outputs in Redis for fast map rendering.
+- **Stateless Inference**: Endpoints run fast inference on-request by querying active models from the file registry (which caches unpickled artifacts in-process, keyed by `(model_type, version)`), caching score and list-endpoint outputs in Redis (fail-soft - a Redis outage falls back to live Postgres) for fast map rendering. See `.claude/skills/backend/SKILL.md` for the full key/TTL contract.
+- **Health checks**: `GET /health` (liveness) and `GET /ready` (readiness - Postgres required, Redis optional/degraded-not-down) sit outside the API-key-gated router for orchestrators to hit directly.
 
 ## 5. Frontend Layer (React & Leaflet)
 - **Map View Architecture**: Powered by React, Vite, TailwindCSS, and `react-leaflet`. `MapPage.tsx` manages the state for active overlays and the selected area detail side-panel.

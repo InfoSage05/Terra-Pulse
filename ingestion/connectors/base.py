@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from ingestion.utils.logging_config import setup_logger
+from storage.models.db_models import IngestionRun
 
 class BaseConnector(abc.ABC):
     """
@@ -62,39 +63,97 @@ class BaseConnector(abc.ABC):
     def run(self):
         """Execute the full pipeline and report summary."""
         self.logger.info(f"Starting ingestion for {self.source_name}")
-        
+
+        run_record = self._start_ingestion_run()
+
         raw_data = []
         try:
             raw_data = self.fetch()
             self.stats["fetched"] = len(raw_data)
         except Exception as e:
             self.logger.error(f"Failed to fetch data: {e}")
+            self._finish_ingestion_run(run_record, status='failed')
             return
-            
+
         for record in raw_data:
             try:
                 validated = self.validate(record)
-                if validated:
-                    self.stats["validated"] += 1
-                    if self.load(validated):
+                if not validated:
+                    self._dead_letter(record, "Validation failed")
+                    continue
+                self.stats["validated"] += 1
+
+                # Each record's load() runs inside its own SAVEPOINT. If it
+                # raises (e.g. a constraint violation, or a bad query),
+                # Postgres aborts the connection's current transaction -
+                # without a savepoint boundary, every subsequent record in
+                # this same connector run would then fail too (a single bad
+                # row silently zeroing out the whole batch). Exiting this
+                # `with` block on exception rolls back only to the savepoint,
+                # leaving prior successful records intact and the session
+                # usable for the next record.
+                try:
+                    with self.db.begin_nested():
+                        loaded = self.load(validated)
+                    if loaded:
                         self.stats["upserted"] += 1
                     else:
                         self.stats["errors"] += 1
-                else:
-                    self._dead_letter(record, "Validation failed")
+                except SQLAlchemyError as e:
+                    self.logger.error(f"Load failed for record, rolled back to savepoint: {e}")
+                    self._dead_letter(record, str(e))
+                    self.stats["errors"] += 1
             except Exception as e:
                 self.logger.error(f"Unexpected error processing record: {e}")
                 self._dead_letter(record, str(e))
                 self.stats["errors"] += 1
-                
+
         # Final commit for the batch
+        commit_failed = False
         try:
             self.db.commit()
         except SQLAlchemyError as e:
             self.logger.error(f"Final commit failed: {e}")
             self.db.rollback()
-            
+            commit_failed = True
+
         self.print_summary()
+
+        status = 'failed' if commit_failed else (
+            'completed_with_errors' if self.stats["errors"] or self.stats["rejected"] else 'completed'
+        )
+        self._finish_ingestion_run(run_record, status=status)
+
+    def _start_ingestion_run(self):
+        """Create an IngestionRun row marking the start of this connector's run."""
+        run_record = IngestionRun(
+            source_name=self.source_name,
+            started_at=datetime.now(),
+            status='running'
+        )
+        try:
+            self.db.add(run_record)
+            self.db.commit()
+        except SQLAlchemyError as e:
+            self.logger.error(f"Failed to create ingestion_runs record: {e}")
+            self.db.rollback()
+            return None
+        return run_record
+
+    def _finish_ingestion_run(self, run_record, status: str):
+        """Update the IngestionRun row with final row counts and status."""
+        if run_record is None:
+            return
+        try:
+            run_record.finished_at = datetime.now()
+            run_record.rows_fetched = self.stats["fetched"]
+            run_record.rows_upserted = self.stats["upserted"]
+            run_record.rows_dead_lettered = self.stats["rejected"] + self.stats["errors"]
+            run_record.status = status
+            self.db.commit()
+        except SQLAlchemyError as e:
+            self.logger.error(f"Failed to update ingestion_runs record: {e}")
+            self.db.rollback()
 
     def _dead_letter(self, record: dict, reason: str):
         """Write invalid record to a dead letter file."""
