@@ -2,29 +2,45 @@
 
 TerraPulse is an agentic AI platform for analyzing housing prices and neighborhood conditions in Dublin (with architecture ready to expand across Ireland). It combines structured data (property sales, amenities, crime, demographics) with unstructured text (agent-driven qualitative summaries) to provide unified scores and price predictions for specific geographic areas.
 
-## Architecture Overview
+**One-sentence pitch:** it's a property-intelligence app — pick an area of Dublin (or search a specific sold property) and see a livability/price score built from real government data, plotted on a map.
 
-TerraPulse is built on a 5-layer pipeline. Data flows from public sources through ingestion
-into Postgres, where agents and ML models process it, and a FastAPI + React stack serves it.
+## What it does, in plain words
+
+- Pulls **real historical property sale prices** for Dublin from Ireland's official Property Price Register (PPR).
+- Combines that with **amenities** (shops, transport, schools — from OpenStreetMap), **crime stats**, and **demographics** for each area.
+- Turns those numbers into a single **area score** (affordability, safety, etc.) and a **price prediction** model (LightGBM).
+- An **LLM agent layer** can write qualitative text summaries about an area.
+- All of it is served through a **FastAPI backend** + **React/Leaflet map frontend**, so a user can browse Dublin on a map, search sold properties, filter by area/price/date, and see scores.
+- Users can **sign in** (email/password or Google OAuth) — added recently by a teammate.
+
+## How to explain the architecture in an interview
+
+Five layers, data flows top to bottom:
+
+1. **Data Sources (L1)** — external sources: PPR (property sales), OpenStreetMap (amenities), CSO (demographics), Garda crime stats.
+2. **Ingestion (L2)** — Python "connectors," one per source, run daily by a scheduler (APScheduler). Each connector: fetch → validate (Pydantic) → upsert into Postgres. Bad rows go to a dead-letter folder instead of crashing the run.
+3. **Storage (L3)** — PostgreSQL + PostGIS (stores geography/polygons for areas) is the source of truth; Redis caches expensive-to-compute results (area scores, list endpoints) so the API doesn't recompute them on every request.
+4. **Agents + Models (L4)** — LightGBM model predicts prices; a scoring service computes affordability/safety scores from formulas; an LLM agent pipeline (via OpenRouter) generates area summaries.
+5. **Application (L5)** — FastAPI serves REST endpoints; React (Vite) + Leaflet renders the map/search UI and calls those endpoints.
 
 ```mermaid
 flowchart TD
     subgraph L1["📡 L1 — Data Sources"]
         direction LR
-        PPR["PPR ✅<br/>795k Dublin sales<br/>Live ZIP download"]
+        PPR["PPR ✅<br/>~8k Dublin sales<br/>Live ZIP download"]
         OSM["OSM ✅<br/>Overpass API<br/>Real amenities"]
         CSO["CSO ❌<br/>Stub only<br/>Sample data"]
-        CRIME["Crime ❌<br/>Stub only<br/>Sample data"]
+        CRIME["Crime ✅<br/>Real ingested rows"]
     end
 
     subgraph L2["🔄 L2 — Ingestion (daily at 03:00)"]
-        CONN["Python Connectors<br/>fetch → validate → upsert"]
+        CONN["Python Connectors<br/>fetch → validate → upsert<br/>(per-row SAVEPOINT so one bad row can't kill the batch)"]
         SCHED["APScheduler<br/>cron trigger"]
         SCHED --> CONN
     end
 
     subgraph L3["💾 L3 — Storage"]
-        PG["PostgreSQL + PostGIS<br/>property_sales · areas · amenities<br/>crime_stats · demographics"]
+        PG["PostgreSQL + PostGIS<br/>property_sales · areas · amenities<br/>crime_stats · demographics · users"]
         REDIS["Redis<br/>✅ area_scores:* + area_list:* caching"]
     end
 
@@ -34,8 +50,8 @@ flowchart TD
     end
 
     subgraph L5["🌐 L5 — Application"]
-        API["FastAPI<br/>REST endpoints"]
-        UI["React · Vite · Maps<br/>search + listing"]
+        API["FastAPI (async)<br/>REST endpoints + auth"]
+        UI["React · Vite · Leaflet<br/>search + map + login"]
     end
 
     L1 --> L2
@@ -65,10 +81,10 @@ flowchart LR
 
 | Connector | Status | Real data? | Source |
 |-----------|--------|-----------|--------|
-| PPR | ✅ Working | Yes — 795k rows from PPR-ALL.zip | propertypriceregister.ie |
-| OSM | ✅ Working | Yes — Overpass API | openstreetmap.org |
+| PPR | ✅ Working | Yes — national ZIP filtered down to ~8,200 Dublin sales | propertypriceregister.ie |
+| OSM | ⚠️ Partial | Only ~2 amenities fetched (falls back to sample data — likely an Overpass API rate-limit issue, not yet fixed) | openstreetmap.org |
 | CSO | ❌ Stub | No — 2 hardcoded sample rows | Needs CSO PxStat HPM04 + SAPS |
-| Crime | ❌ Stub | No — 2 hardcoded sample rows | Needs CSO PxStat CJA01 |
+| Crime | ✅ Working | Yes — ~10,200 real rows ingested | Garda / CSO PxStat CJA01 |
 
 *For complete details, see [docs/architecture.md](docs/architecture.md).*
 
@@ -245,6 +261,9 @@ Copy `.env.example` to `.env` and fill in at least the required values:
 | `VITE_API_BASE_URL` | Frontend | Base URL for backend API (default: `http://localhost:8000`) |
 | `OPENROUTER_API_KEY` | Agent pipeline | OpenRouter key for LLM summarization |
 | `MODEL_REGISTRY_PATH` | Backend prediction | Path to persisted model registry |
+| `GOOGLE_CLIENT_ID` | Backend auth | Google OAuth client ID, used to verify Google ID tokens server-side |
+| `JWT_SECRET` | Backend auth | Secret used to sign login session JWTs |
+| `JWT_EXPIRE_MINUTES` | Backend auth | Login session cookie lifetime |
 
 ---
 
@@ -264,30 +283,34 @@ terrapulse/
 
 ---
 
+## Recent Work (what changed and why — useful for interview prep)
+
+**1. Backend hardening pass** — the backend was made async end-to-end (`SQLAlchemy` async engine + `asyncpg` instead of blocking sync calls), scoring formulas were pulled out of the service layer into a shared, unit-tested module (`shared/scoring_formulas.py`), model artifacts are now cached in memory instead of re-unpickled on every prediction, list endpoints (`/areas`, `/neighborhoods`) got Redis caching, and `/health` + `/ready` endpoints were added for container orchestration. API-key auth was tightened to support key rotation (`API_KEYS` comma-separated list).
+
+**2. Ingestion was actually broken end-to-end, and it took two separate root-cause fixes to get real data flowing:**
+   - *Bug 1 — poisoned transactions:* every connector's `load()` caught DB errors but never called `db.rollback()`. Once one row failed, Postgres sat in `InFailedSqlTransaction` for the rest of that run, so every later row failed too — even though the connector *reported* rows fetched. Fixed by wrapping each row in its own SAVEPOINT (`db.begin_nested()`), so one bad row only rolls back itself.
+   - *Bug 2 — wrong constraint names:* the original migrations declared `UNIQUE(...)` without naming the constraint, so Postgres auto-generated its own names. The connectors' `ON CONFLICT ON CONSTRAINT <explicit name>` clauses referenced names that didn't exist, so **every insert silently failed with "constraint does not exist."** Fixed with a migration that renames the constraints to match what the code expects.
+   - After both fixes: PPR ingests ~8,200 real Dublin sales, Crime ingests ~10,200 rows, CSO still stubbed, OSM still only pulling ~2 amenities (separate, unfixed issue — likely an Overpass API rate limit).
+
+**3. Frontend data-authenticity fixes** — the UI was showing duplicate stock photos, €0 prices, and no map markers because it was rendering against the broken/empty ingestion output above. Once ingestion was fixed: real area photos (sourced from Wikimedia Commons), a working `X-Total-Count` response header so the UI shows the true result count instead of just "50" (the page size), real map markers (jittered around an area's centroid when a property has no exact lat/lon, since PPR data isn't geocoded), new filters (by area, by sale-date range), and "Load more" now genuinely accumulates results instead of replacing them.
+   - One UX judgment call worth mentioning in an interview: the PPR dataset is 100% *historical completed sales*, there's no live "for sale" feed. So "sold vs. available" can't be shown honestly — instead, markers/cards are colored by **recency** (green = sold in the last 90 days, red = older), which is a real signal instead of a fabricated one.
+
+**4. Authentication (added by a teammate)** — email/password and Google OAuth login, using signed JWT cookies (`httponly`, `samesite=lax`). Google sign-in verifies the ID token server-side against Google's public keys (`google.oauth2.id_token.verify_oauth2_token`) before trusting it — this is the step that stops someone from just forging a token. New tables/files: `backend/app/db/models.py` (`User`), `backend/app/api/auth.py` (`/auth/register`, `/auth/login`, `/auth/google`, `/auth/me`, `/auth/logout`), `backend/app/api/deps.py` (`get_current_user` dependency).
+
 ## Data Ingestion: Current Issues
 
-The ingestion design is sound but the layer is **not runnable in its current state**.
-Below is a concise list of what needs to be fixed before data flows end-to-end.
-
-### Blockers (must fix to run at all)
+Two of the original blockers below turned out to be the real root cause of "no real data anywhere" and are now fixed (see Recent Work above). Remaining gaps:
 
 | # | Issue | Detail |
 |---|-------|--------|
-| 1 | **Postgres & Redis not running** | Ports 5432 and 6379 are closed. Nothing can be persisted or cached. |
-| 2 | **Python venv is broken** | `.venv/bin/pip` missing, no deps installed. `run_ingestion.py` cannot import. |
-| ~~3~~ | ~~No automated migration runner~~ | **Resolved.** `storage/scripts/run_migrations.py` is idempotent (tracks applied files in a `schema_migrations` table) and runs on every `backend`/`scheduler` container start (`backend/Dockerfile`). |
-| 10 | **A single bad row aborts an entire ingestion run** | Every connector's `load()` (`ingestion/connectors/*.py`) catches DB errors but never calls `db.rollback()`. Postgres then sits in `InFailedSqlTransaction` for the rest of that connector's shared session, so **every subsequent record in the same run fails too** — e.g. a fresh-DB PPR run fetched 8199 real rows and upserted 0. Ingestion-layer bug, not fixed as part of the backend-hardening pass. |
-
-### Efficiency & correctness gaps
-
-| # | Issue | Detail |
-|---|-------|--------|
-| 4 | **PPR downloads full national zip every run** | `PPR-ALL.zip` is 795k rows / 18 MB — re-downloaded daily just to keep Dublin. No incremental/delta logic. |
-| 5 | **PPR rows are not geocoded** | `area_id`, `lat`, `lon` are all `NULL` in `property_sales` after ingestion — so area-scoped scores cannot use PPR data. |
-| 6 | **Redundant CSV copies, no cleanup** | Per-run files accumulate in `data/processed/ppr/` with no retention. Separate `manual_pulls/` and `data/exports/` add confusion. Only the master export (`data/exports/ppr_dublin_master.csv`) should be canonical. |
-| 7 | **CSO & Crime connectors return fake data** | `cso_connector.py` and `crime_connector.py` both call `_get_sample_data()` — 2 hardcoded rows each. The real endpoints (CSO PxStat HPM04, CJA01, SAPS) are known and documented but never called. |
-| 8 | **`ingestion_runs` never records row counts** | `rows_fetched`, `rows_upserted`, `rows_dead_lettered` stay at default 0. The table was built explicitly for queryable history but isn't fed. |
-| ~~9~~ | ~~Redis cache invalidation is a no-op~~ | **Resolved.** `backend/app/core/cache.py` + `score_service.py`/`area_service.py`/`neighborhood_service.py` wire real, fail-soft Redis caching for both `area_scores:*` and `area_list:*` - see `.claude/skills/backend/SKILL.md` for the full key/TTL contract. |
+| ~~1~~ | ~~Poisoned transaction on bad row~~ | **Resolved.** Per-row SAVEPOINT in `ingestion/connectors/base.py`. |
+| ~~2~~ | ~~Wrong `ON CONFLICT` constraint names~~ | **Resolved.** `storage/migrations/010_rename_unique_constraints.sql`. |
+| ~~3~~ | ~~No automated migration runner~~ | **Resolved.** `storage/scripts/run_migrations.py` is idempotent (tracks applied files in a `schema_migrations` table) and runs on every `backend`/`scheduler` container start. |
+| 4 | **OSM connector only returns ~2 amenities** | Falls back to `_get_sample_data()` — likely an Overpass API rate-limit or request failure. Not yet diagnosed. |
+| 5 | **PPR rows are not geocoded** | `area_id`, `lat`, `lon` are all `NULL` in `property_sales` after ingestion, so the frontend map has to approximate marker positions from the area's centroid instead of the real address. |
+| 6 | **CSO connector returns fake data** | `cso_connector.py` calls `_get_sample_data()` — 2 hardcoded rows. The real CSO PxStat HPM04/SAPS endpoints are documented but never called. |
+| 7 | **`ingestion_runs` never records row counts** | `rows_fetched`, `rows_upserted`, `rows_dead_lettered` stay at default 0, even though the table exists for queryable history. |
+| ~~8~~ | ~~Redis cache invalidation is a no-op~~ | **Resolved.** `backend/app/core/cache.py` + `score_service.py`/`area_service.py`/`neighborhood_service.py` wire real, fail-soft Redis caching for both `area_scores:*` and `area_list:*` — see `.claude/skills/backend/SKILL.md` for the full key/TTL contract. |
 
 ### Missing connectors (from co-intern's data source catalog)
 
